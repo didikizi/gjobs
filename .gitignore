@@ -1,0 +1,31 @@
+# Binaries
+*.exe
+*.exe~
+*.dll
+*.so
+*.dylib
+*.claude
+
+# Test binary
+*.test
+
+# Output of go build
+/main
+
+# SQLite databases
+*.db
+*.db-shm
+*.db-wal
+
+# Editor directories
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Environment
+.env

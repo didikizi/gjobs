@@ -1,0 +1,255 @@
+package jobs
+
+import (
+	"context"
+	"encoding/json"
+	"fmt"
+	"sync"
+	"time"
+
+	"github.com/google/uuid"
+)
+
+// Storage is the persistence layer. Implement this interface to add a new backend
+// (e.g. MySQL, Redis) without changing any other code.
+type Storage interface {
+	// Job operations
+	Enqueue(ctx context.Context, job *Job) error
+	Claim(ctx context.Context, limit int) ([]*Job, error)
+	MarkDone(ctx context.Context, id string) error
+	MarkFailed(ctx context.Context, id string, errMsg string, retryAt *time.Time) error
+	MarkPending(ctx context.Context, id string, runAt time.Time) error
+
+	// Cron operations
+	UpsertCron(ctx context.Context, c *CronEntry) error
+	DueCrons(ctx context.Context) ([]*CronEntry, error)
+	UpdateCronRun(ctx context.Context, name string, last, next time.Time) error
+
+	Close() error
+}
+
+// Queue is the main entry point. Create one with New, register handlers with
+// Register/HandleDef/Schedule, push work with Enqueue, then call Start.
+type Queue struct {
+	storage Storage
+	cfg     config
+
+	mu           sync.RWMutex
+	handlers     map[string]HandlerFunc
+	defs         map[string]JobDef
+	pendingCrons []cronReg
+
+	pool      *workerPool
+	scheduler *cronScheduler
+	stopDash  func(context.Context) // set by Dashboard()
+
+	stopOnce sync.Once
+}
+
+// New creates a Queue. Storage defaults to SQLite at "jobs.db".
+// Override with WithDB, WithConcurrency, WithPollInterval, or WithStorage.
+func New(opts ...Option) (*Queue, error) {
+	cfg := defaultConfig()
+	for _, o := range opts {
+		o(&cfg)
+	}
+
+	var s Storage
+	if cfg.storage != nil {
+		s = cfg.storage
+	} else {
+		var err error
+		s, err = NewSQLiteStorage(cfg.dbPath)
+		if err != nil {
+			return nil, err
+		}
+	}
+
+	return &Queue{
+		storage:  s,
+		cfg:      cfg,
+		handlers: make(map[string]HandlerFunc),
+		defs:     make(map[string]JobDef),
+	}, nil
+}
+
+// Register registers a handler for the given JobDef.
+// If JobDef.Timeout > 0 the handler context is cancelled after that duration.
+//
+//	var SendEmail = jobs.Def("send_email")
+//	q.Register(SendEmail, handler)
+func (q *Queue) Register(def JobDef, handler HandlerFunc) {
+	h := handler
+	if def.Timeout > 0 {
+		h = func(ctx context.Context, payload []byte) error {
+			ctx, cancel := context.WithTimeout(ctx, def.Timeout)
+			defer cancel()
+			return handler(ctx, payload)
+		}
+	}
+	q.mu.Lock()
+	q.handlers[def.Name] = h
+	q.defs[def.Name] = def
+	q.mu.Unlock()
+}
+
+// HandleDef registers a typed handler that automatically unmarshals the JSON payload.
+//
+//	var SendEmail = jobs.Def("send_email")
+//	jobs.HandleDef[Email](q, SendEmail, func(ctx context.Context, e Email) error {
+//	    return sendEmail(e)
+//	})
+func HandleDef[T any](q *Queue, def JobDef, fn func(ctx context.Context, payload T) error) {
+	q.Register(def, func(ctx context.Context, raw []byte) error {
+		var v T
+		if err := json.Unmarshal(raw, &v); err != nil {
+			return fmt.Errorf("jobs: unmarshal payload for %q: %w", def.Name, err)
+		}
+		return fn(ctx, v)
+	})
+}
+
+// Enqueue adds a job to the queue. Uses def.MaxRetries as the default retry
+// count; caller options override it.
+//
+//	q.Enqueue(SendEmail, Email{To: "user@example.com"})
+//	q.Enqueue(SendEmail, data, jobs.Retries(10))        // override retries
+//	q.Enqueue(SendEmail, data, jobs.After(time.Minute)) // delayed
+func (q *Queue) Enqueue(def JobDef, payload any, opts ...PushOption) error {
+	merged := make([]PushOption, 0, 1+len(opts))
+	merged = append(merged, Retries(def.MaxRetries))
+	merged = append(merged, opts...)
+
+	pcfg := defaultPushConfig()
+	for _, o := range merged {
+		o(&pcfg)
+	}
+	return q.enqueueRaw(def.Name, payload, pcfg)
+}
+
+// Schedule registers a recurring job that fires every interval.
+// interval is any Go duration string: "5s", "30m", "2h".
+//
+//	var Heartbeat = jobs.Def("heartbeat")
+//	q.Schedule(Heartbeat, "1m", func(ctx context.Context) error { ... })
+func (q *Queue) Schedule(def JobDef, interval string, fn func(ctx context.Context) error) error {
+	q.Register(def, func(ctx context.Context, _ []byte) error { return fn(ctx) })
+	return q.registerCron(def.Name, interval)
+}
+
+// CancelAll cancels the context of every currently running job of the given type.
+// Handlers receive ctx.Err() == context.Canceled and the normal retry logic applies.
+// Pending jobs (not yet picked up by a worker) are not affected.
+// Returns the number of in-flight jobs whose contexts were cancelled.
+//
+//	n := q.CancelAll(SendEmail)
+//	fmt.Printf("cancelled %d running send_email jobs\n", n)
+func (q *Queue) CancelAll(def JobDef) int {
+	if q.pool == nil {
+		return 0
+	}
+	return q.pool.cancelAll(def.Name)
+}
+
+// ── internals ─────────────────────────────────────────────────────────────────
+
+func (q *Queue) enqueueRaw(name string, payload any, pcfg pushConfig) error {
+	raw, err := json.Marshal(payload)
+	if err != nil {
+		return fmt.Errorf("jobs: marshal payload: %w", err)
+	}
+	now := time.Now()
+	return q.storage.Enqueue(context.Background(), &Job{
+		ID:         uuid.New().String(),
+		Type:       name,
+		Payload:    raw,
+		Status:     StatusPending,
+		MaxRetries: pcfg.maxRetries,
+		RunAt:      pcfg.runAt,
+		CreatedAt:  now,
+		UpdatedAt:  now,
+	})
+}
+
+// registerCron stores a cron entry; buffers it if called before Start.
+func (q *Queue) registerCron(name, schedule string) error {
+	if q.scheduler != nil {
+		return q.scheduler.register(name, schedule)
+	}
+	q.mu.Lock()
+	q.pendingCrons = append(q.pendingCrons, cronReg{name: name, schedule: schedule})
+	q.mu.Unlock()
+	return nil
+}
+
+// ── lifecycle ─────────────────────────────────────────────────────────────────
+
+// Start begins processing jobs and cron schedules. It blocks until the
+// context is cancelled, then performs a graceful shutdown.
+func (q *Queue) Start(ctx context.Context) error {
+	q.mu.RLock()
+	handlers := make(map[string]HandlerFunc, len(q.handlers))
+	for k, v := range q.handlers {
+		handlers[k] = v
+	}
+	defs := make(map[string]JobDef, len(q.defs))
+	for k, v := range q.defs {
+		defs[k] = v
+	}
+	pending := q.pendingCrons
+	q.mu.RUnlock()
+
+	q.pool = newWorkerPool(q.storage, handlers, defs, q.cfg.concurrency, q.cfg.pollInterval,
+		q.cfg.backoffBase, q.cfg.backoffCap, q.cfg.logger, q.cfg.errCh)
+
+	q.scheduler = newCronScheduler(q.storage, func(name string) error {
+		return q.enqueueRaw(name, nil, pushConfig{maxRetries: 0, runAt: time.Now()})
+	}, q.cfg.logger, q.cfg.pollInterval)
+	for _, cr := range pending {
+		if err := q.scheduler.register(cr.name, cr.schedule); err != nil {
+			return err
+		}
+	}
+
+	q.pool.start()
+	q.scheduler.start()
+
+	<-ctx.Done()
+	return q.Stop(context.Background())
+}
+
+// Stop gracefully stops the queue, waiting for in-flight jobs to finish.
+// Safe to call multiple times.
+func (q *Queue) Stop(ctx context.Context) error {
+	var err error
+	q.stopOnce.Do(func() {
+		if q.scheduler != nil {
+			q.scheduler.stop()
+			q.scheduler.wait()
+		}
+		if q.pool != nil {
+			q.pool.stop()
+			done := make(chan struct{})
+			go func() {
+				q.pool.wait()
+				close(done)
+			}()
+			select {
+			case <-done:
+			case <-ctx.Done():
+				err = ctx.Err()
+			}
+		}
+		if q.stopDash != nil {
+			q.stopDash(ctx)
+		}
+		q.storage.Close() //nolint:errcheck
+	})
+	return err
+}
+
+// cronReg buffers Schedule calls made before Start.
+type cronReg struct {
+	name     string
+	schedule string
+}
