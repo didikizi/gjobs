@@ -27,15 +27,16 @@ type Call struct {
 //	}
 //	q, _ := jobs.New(jobs.WithStorage(mock))
 type MockStorage struct {
-	EnqueueFn       func(ctx context.Context, job *jobs.Job) error
-	ClaimFn         func(ctx context.Context, limit int) ([]*jobs.Job, error)
-	MarkDoneFn      func(ctx context.Context, id string) error
-	MarkFailedFn    func(ctx context.Context, id string, errMsg string, retryAt *time.Time) error
-	MarkPendingFn   func(ctx context.Context, id string, runAt time.Time) error
-	UpsertCronFn    func(ctx context.Context, c *jobs.CronEntry) error
-	DueCronsFn      func(ctx context.Context) ([]*jobs.CronEntry, error)
-	UpdateCronRunFn func(ctx context.Context, name string, last, next time.Time) error
-	CloseFn         func() error
+	EnqueueFn        func(ctx context.Context, job *jobs.Job) error
+	ClaimFn          func(ctx context.Context, limit int) ([]*jobs.Job, error)
+	MarkDoneFn       func(ctx context.Context, id string) error
+	MarkFailedFn     func(ctx context.Context, id string, errMsg string, retryAt *time.Time) error
+	MarkPendingFn    func(ctx context.Context, id string, runAt time.Time) error
+	RecoverStuckFn   func(ctx context.Context) error
+	UpsertCronFn     func(ctx context.Context, c *jobs.CronEntry) error
+	DueCronsFn       func(ctx context.Context) ([]*jobs.CronEntry, error)
+	UpdateCronRunFn  func(ctx context.Context, name string, last, next time.Time) error
+	CloseFn          func() error
 
 	mu    sync.Mutex
 	Calls []Call
@@ -101,6 +102,14 @@ func (m *MockStorage) MarkPending(ctx context.Context, id string, runAt time.Tim
 	m.record("MarkPending", id, runAt)
 	if m.MarkPendingFn != nil {
 		return m.MarkPendingFn(ctx, id, runAt)
+	}
+	return nil
+}
+
+func (m *MockStorage) RecoverStuck(ctx context.Context) error {
+	m.record("RecoverStuck")
+	if m.RecoverStuckFn != nil {
+		return m.RecoverStuckFn(ctx)
 	}
 	return nil
 }

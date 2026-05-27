@@ -185,7 +185,7 @@ func benchE2E(b *testing.B, def JobDef, payload any, concurrency int) {
 	b.ResetTimer()
 
 	for range b.N {
-		q.Enqueue(def, payload) //nolint:errcheck
+		q.Enqueue(context.Background(), def, payload) //nolint:errcheck
 	}
 
 	timeout := time.After(60 * time.Second)
@@ -228,7 +228,7 @@ func benchConcurrency(b *testing.B, workers int) {
 	b.ResetTimer()
 
 	for range b.N {
-		q.Enqueue(noop, nil) //nolint:errcheck
+		q.Enqueue(context.Background(), noop, nil) //nolint:errcheck
 	}
 
 	timeout := time.After(60 * time.Second)

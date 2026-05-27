@@ -134,6 +134,15 @@ func (s *SQLiteStorage) MarkFailed(ctx context.Context, id string, errMsg string
 	return err
 }
 
+// RecoverStuck resets jobs stuck in 'running' back to 'pending' after a crash.
+func (s *SQLiteStorage) RecoverStuck(ctx context.Context) error {
+	_, err := s.db.ExecContext(ctx,
+		`UPDATE jobs SET status='pending', updated_at=? WHERE status='running'`,
+		time.Now().UTC(),
+	)
+	return err
+}
+
 // MarkPending reschedules a job as pending at runAt (used internally by cron).
 func (s *SQLiteStorage) MarkPending(ctx context.Context, id string, runAt time.Time) error {
 	_, err := s.db.ExecContext(ctx,

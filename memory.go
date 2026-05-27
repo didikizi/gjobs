@@ -92,6 +92,20 @@ func (m *MemoryStorage) MarkFailed(_ context.Context, id string, errMsg string, 
 	return nil
 }
 
+// RecoverStuck resets any in-memory jobs stuck in 'running' back to 'pending'.
+func (m *MemoryStorage) RecoverStuck(_ context.Context) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	now := time.Now()
+	for _, j := range m.jobs {
+		if j.Status == StatusRunning {
+			j.Status = StatusPending
+			j.UpdatedAt = now
+		}
+	}
+	return nil
+}
+
 func (m *MemoryStorage) MarkPending(_ context.Context, id string, runAt time.Time) error {
 	m.mu.Lock()
 	defer m.mu.Unlock()

@@ -73,25 +73,25 @@ func main() {
 	})
 
 	// ── Cron ─────────────────────────────────────────────────────────────────
-	q.Schedule(Heartbeat, "3s", func(_ context.Context) error {
+	q.Schedule(context.Background(), Heartbeat, "3s", func(_ context.Context) error {
 		fmt.Println("[cron]    → heartbeat")
 		return nil
 	})
 
 	// ── Enqueue work ─────────────────────────────────────────────────────────
-	q.Enqueue(SendWelcomeEmail, Email{To: "alice@example.com", Subject: "Welcome!"})
-	q.Enqueue(SendPromoEmail, Email{To: "bob@example.com", Subject: "20% off this week"})
-	q.Enqueue(ChargeSubscription, Payment{UserID: "u_42", Amount: 9.99, Currency: "USD"})
-	q.Enqueue(GenerateReport, Report{ReportID: "rpt_001", Format: "csv"})
+	q.Enqueue(context.Background(), SendWelcomeEmail, Email{To: "alice@example.com", Subject: "Welcome!"})
+	q.Enqueue(context.Background(), SendPromoEmail, Email{To: "bob@example.com", Subject: "20% off this week"})
+	q.Enqueue(context.Background(), ChargeSubscription, Payment{UserID: "u_42", Amount: 9.99, Currency: "USD"})
+	q.Enqueue(context.Background(), GenerateReport, Report{ReportID: "rpt_001", Format: "csv"})
 
 	// Delayed — run after 2 seconds.
-	q.Enqueue(SendPromoEmail,
+	q.Enqueue(context.Background(), SendPromoEmail,
 		Email{To: "charlie@example.com", Subject: "Delayed promo"},
 		jobs.After(2*time.Second),
 	)
 
 	// Override retries for a single push.
-	q.Enqueue(ChargeSubscription,
+	q.Enqueue(context.Background(), ChargeSubscription,
 		Payment{UserID: "u_99", Amount: 19.99, Currency: "EUR"},
 		jobs.Retries(15),
 	)

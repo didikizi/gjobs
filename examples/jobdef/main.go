@@ -85,7 +85,7 @@ func main() {
 	})
 
 	// Cron: heartbeat every 2 seconds.
-	if err := q.Schedule(Heartbeat, "2s", func(ctx context.Context) error {
+	if err := q.Schedule(context.Background(), Heartbeat, "2s", func(ctx context.Context) error {
 		fmt.Println("  [cron]    ♥ heartbeat")
 		return nil
 	}); err != nil {
@@ -95,24 +95,24 @@ func main() {
 	// ── Enqueue jobs ──────────────────────────────────────────────────────────
 
 	// Standard email — uses SendEmail defaults (3 retries, no timeout).
-	_ = q.Enqueue(SendEmail, Email{
+	_ = q.Enqueue(context.Background(), SendEmail, Email{
 		To:      "alice@example.com",
 		Subject: "Welcome!",
 		Body:    "Hi Alice, thanks for signing up.",
 	})
 
 	// Critical email — uses CriticalEmail overrides (8 retries, 45s timeout).
-	_ = q.Enqueue(CriticalEmail, Email{
+	_ = q.Enqueue(context.Background(), CriticalEmail, Email{
 		To:      "bob@example.com",
 		Subject: "Your invoice is ready",
 		Body:    "Please find attached your invoice.",
 	})
 
 	// Charge with per-call retry override.
-	_ = q.Enqueue(ChargeCard, Payment{UserID: "u-42", AmountUSD: 99.00}, jobs.Retries(15))
+	_ = q.Enqueue(context.Background(), ChargeCard, Payment{UserID: "u-42", AmountUSD: 99.00}, jobs.Retries(15))
 
 	// Report delayed by 1 second.
-	_ = q.Enqueue(GenerateReport, ReportParams{
+	_ = q.Enqueue(context.Background(), GenerateReport, ReportParams{
 		ReportID:  "monthly-2025-12",
 		StartDate: time.Date(2025, 12, 1, 0, 0, 0, 0, time.UTC),
 		EndDate:   time.Date(2025, 12, 31, 0, 0, 0, 0, time.UTC),

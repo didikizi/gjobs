@@ -46,7 +46,7 @@ func TestJobExecution(t *testing.T) {
 		return nil
 	})
 
-	if err := q.Enqueue(def, nil); err != nil {
+	if err := q.Enqueue(context.Background(), def, nil); err != nil {
 		t.Fatalf("Enqueue: %v", err)
 	}
 
@@ -78,7 +78,7 @@ func TestTypedHandler(t *testing.T) {
 		return nil
 	})
 
-	if err := q.Enqueue(def, Email{To: "test@example.com"}); err != nil {
+	if err := q.Enqueue(context.Background(), def, Email{To: "test@example.com"}); err != nil {
 		t.Fatalf("Enqueue: %v", err)
 	}
 
@@ -107,7 +107,7 @@ func TestRetryOnFailure(t *testing.T) {
 		return errors.New("transient error")
 	})
 
-	if err := q.Enqueue(def, nil, Retries(3)); err != nil {
+	if err := q.Enqueue(context.Background(), def, nil, Retries(3)); err != nil {
 		t.Fatalf("Enqueue: %v", err)
 	}
 
@@ -133,7 +133,7 @@ func TestDelayedJob(t *testing.T) {
 		return nil
 	})
 
-	if err := q.Enqueue(def, nil, After(200*time.Millisecond)); err != nil {
+	if err := q.Enqueue(context.Background(), def, nil, After(200*time.Millisecond)); err != nil {
 		t.Fatalf("Enqueue: %v", err)
 	}
 
@@ -167,7 +167,7 @@ func TestDeadLetter(t *testing.T) {
 	})
 
 	// maxRetries=1 → after first failure it should dead-letter immediately.
-	if err := q.Enqueue(def, nil, Retries(1)); err != nil {
+	if err := q.Enqueue(context.Background(), def, nil, Retries(1)); err != nil {
 		t.Fatalf("Enqueue: %v", err)
 	}
 
@@ -197,7 +197,7 @@ func TestCronJob(t *testing.T) {
 
 	var fired atomic.Int32
 	heartbeat := Def("heartbeat")
-	if err := q.Schedule(heartbeat, "100ms", func(_ context.Context) error {
+	if err := q.Schedule(context.Background(), heartbeat, "100ms", func(_ context.Context) error {
 		fired.Add(1)
 		return nil
 	}); err != nil {
@@ -230,7 +230,7 @@ func TestGracefulShutdown(t *testing.T) {
 		return nil
 	})
 
-	if err := q.Enqueue(def, nil); err != nil {
+	if err := q.Enqueue(context.Background(), def, nil); err != nil {
 		t.Fatalf("Enqueue: %v", err)
 	}
 
@@ -269,7 +269,7 @@ func TestPayloadRoundTrip(t *testing.T) {
 		return nil
 	})
 
-	q.Enqueue(def, want) //nolint:errcheck
+	q.Enqueue(context.Background(), def, want) //nolint:errcheck
 
 	stop := runQueue(t, q)
 	defer stop()
@@ -296,7 +296,7 @@ func TestCancelAll(t *testing.T) {
 		close(cancelled)
 		return ctx.Err()
 	})
-	_ = q.Enqueue(def, nil)
+	_ = q.Enqueue(context.Background(), def, nil)
 
 	stop := runQueue(t, q)
 	defer stop()

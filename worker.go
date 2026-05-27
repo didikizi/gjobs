@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"math"
+	"runtime/debug"
 	"sync"
 	"time"
 )
@@ -93,7 +94,7 @@ func (p *workerPool) poll() {
 	ctx := context.Background()
 	jobs, err := p.storage.Claim(ctx, free)
 	if err != nil {
-		p.logger.Error("claim error: %v", err)
+		p.logger.Error("claim error", "error", err)
 		return
 	}
 	for _, job := range jobs {
@@ -113,7 +114,7 @@ func (p *workerPool) dispatch(job *Job) {
 		if !ok {
 			ctx := context.Background()
 			err := fmt.Errorf("no handler registered for type %q", job.Type)
-			p.logger.Error("%v (id=%s)", err, job.ID)
+			p.logger.Error("no handler for job type", "job_id", job.ID, "type", job.Type)
 			p.emit(JobError{JobID: job.ID, Type: job.Type, Err: err, Attempt: job.Attempts + 1, Final: true})
 			_ = p.storage.MarkFailed(ctx, job.ID, err.Error(), nil)
 			return
@@ -134,31 +135,46 @@ func (p *workerPool) dispatch(job *Job) {
 			cancel()
 		}()
 
-		err := fn(jobCtx, job.Payload)
+		// Run the handler with panic recovery so a crashing handler cannot
+		// kill the worker goroutine or leave a job stuck in 'running'.
+		var err error
+		func() {
+			defer func() {
+				if r := recover(); r != nil {
+					err = fmt.Errorf("panic: %v\n%s", r, debug.Stack())
+				}
+			}()
+			err = fn(jobCtx, job.Payload)
+		}()
+
+		// Always use a fresh context for bookkeeping so that a CancelAll that
+		// fired while the handler was running does not break MarkDone/MarkFailed.
+		ctx := context.Background()
+
 		if err == nil {
-			if e := p.storage.MarkDone(jobCtx, job.ID); e != nil {
-				p.logger.Error("mark done (id=%s): %v", job.ID, e)
+			if e := p.storage.MarkDone(ctx, job.ID); e != nil {
+				p.logger.Error("mark done error", "job_id", job.ID, "error", e)
 			}
 			return
 		}
 
-		ctx := context.Background()
 		def := p.defs[job.Type]
 		attempt := job.Attempts + 1
 		if isRetryable(attempt, job.MaxRetries) {
 			retryAt := time.Now().Add(p.calcBackoff(def, attempt))
-			p.logger.Info("job %s (type=%s) attempt %d failed, retry at %s: %v",
-				job.ID, job.Type, attempt, retryAt.Format(time.RFC3339), err)
+			p.logger.Info("job attempt failed, scheduled retry",
+				"job_id", job.ID, "type", job.Type, "attempt", attempt,
+				"retry_at", retryAt.Format(time.RFC3339), "error", err)
 			p.emit(JobError{JobID: job.ID, Type: job.Type, Err: err, Attempt: attempt, Final: false})
 			if e := p.storage.MarkFailed(ctx, job.ID, err.Error(), &retryAt); e != nil {
-				p.logger.Error("schedule retry (id=%s): %v", job.ID, e)
+				p.logger.Error("schedule retry error", "job_id", job.ID, "error", e)
 			}
 		} else {
-			p.logger.Error("job %s (type=%s) dead-lettered after %d attempts: %v",
-				job.ID, job.Type, attempt, err)
+			p.logger.Error("job dead-lettered",
+				"job_id", job.ID, "type", job.Type, "attempts", attempt, "error", err)
 			p.emit(JobError{JobID: job.ID, Type: job.Type, Err: err, Attempt: attempt, Final: true})
 			if e := p.storage.MarkFailed(ctx, job.ID, err.Error(), nil); e != nil {
-				p.logger.Error("mark failed (id=%s): %v", job.ID, e)
+				p.logger.Error("mark failed error", "job_id", job.ID, "error", e)
 			}
 		}
 	}()
@@ -178,20 +194,20 @@ func (p *workerPool) cancelAll(typeName string) int {
 	return n
 }
 
-// calcBackoff returns base * 2^attempt, capped at cap.
+// calcBackoff returns base * 2^(attempt-1), capped at cap.
 // Per-job overrides in def take precedence over pool-level defaults.
 func (p *workerPool) calcBackoff(def JobDef, attempt int) time.Duration {
 	base := p.backoffBase
 	if def.BackoffBase > 0 {
 		base = def.BackoffBase
 	}
-	cap := p.backoffCap
+	maxDelay := p.backoffCap
 	if def.BackoffCap > 0 {
-		cap = def.BackoffCap
+		maxDelay = def.BackoffCap
 	}
-	d := time.Duration(float64(base) * math.Pow(2, float64(attempt)))
-	if d > cap {
-		return cap
+	d := time.Duration(float64(base) * math.Pow(2, float64(attempt-1)))
+	if d > maxDelay {
+		return maxDelay
 	}
 	return d
 }
@@ -205,7 +221,7 @@ func (p *workerPool) emit(e JobError) {
 	select {
 	case p.errCh <- e:
 	default:
-		p.logger.Error("error channel full, dropping event for job %s", e.JobID)
+		p.logger.Error("error channel full, dropping event", "job_id", e.JobID)
 	}
 }
 

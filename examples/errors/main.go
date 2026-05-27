@@ -15,14 +15,6 @@ import (
 	"github.com/vkorolev/gjobs"
 )
 
-// slogAdapter wraps *slog.Logger so it satisfies jobs.Logger.
-// slog's method signature is Info(msg string, args ...any) — identical to the
-// Logger interface, so we can embed it directly without any translation.
-type slogAdapter struct{ *slog.Logger }
-
-func (a slogAdapter) Info(msg string, args ...any)  { a.Logger.Info(fmt.Sprintf(msg, args...)) }
-func (a slogAdapter) Error(msg string, args ...any) { a.Logger.Error(fmt.Sprintf(msg, args...)) }
-
 var (
 	// Transient job: unlimited retries until it succeeds.
 	Sync = jobs.Def("sync").WithRetries(jobs.Unlimited)
@@ -32,8 +24,8 @@ var (
 )
 
 func main() {
-	// Structured logger via log/slog (JSON output).
-	logger := slogAdapter{slog.New(slog.NewJSONHandler(os.Stdout, nil))}
+	// *slog.Logger satisfies jobs.Logger directly — no adapter needed.
+	logger := slog.New(slog.NewJSONHandler(os.Stdout, nil))
 
 	// Error channel — sized so it won't block workers under normal load.
 	errCh := make(chan jobs.JobError, 64)
@@ -83,10 +75,10 @@ func main() {
 	// Sync will retry until handler succeeds (unlimited retries).
 	// Backoff makes retries happen after 30s+, so for the demo we start it
 	// immediately and note that in a real service the retries happen over time.
-	_ = q.Enqueue(Sync, nil)
+	_ = q.Enqueue(context.Background(), Sync, nil)
 
 	// Flaky will fail 3 times and end up dead-lettered.
-	_ = q.Enqueue(Flaky, nil)
+	_ = q.Enqueue(context.Background(), Flaky, nil)
 
 	fmt.Println("Running — watching error channel. Press Ctrl+C to stop.")
 

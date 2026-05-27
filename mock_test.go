@@ -102,7 +102,7 @@ func TestSpy_MarkDone_CalledOnSuccess(t *testing.T) {
 
 	ok := Def("ok")
 	q.Register(ok, func(_ context.Context, _ []byte) error { return nil })
-	q.Enqueue(ok, nil) //nolint:errcheck
+	q.Enqueue(context.Background(), ok, nil) //nolint:errcheck
 
 	startAndWait(t, q, func() bool { return spy.doneCount() == 1 })
 
@@ -124,7 +124,7 @@ func TestSpy_MarkFailed_WithRetry_WhenRetriesRemain(t *testing.T) {
 	q.Register(flaky, func(_ context.Context, _ []byte) error {
 		return errors.New("transient")
 	})
-	q.Enqueue(flaky, nil, Retries(3)) //nolint:errcheck
+	q.Enqueue(context.Background(), flaky, nil, Retries(3)) //nolint:errcheck
 
 	startAndWait(t, q, func() bool { return spy.failedCount() >= 1 })
 
@@ -150,7 +150,7 @@ func TestSpy_MarkFailed_DeadLetter_WhenNoRetriesLeft(t *testing.T) {
 	q.Register(broken, func(_ context.Context, _ []byte) error {
 		return errors.New("permanent")
 	})
-	q.Enqueue(broken, nil, Retries(1)) //nolint:errcheck
+	q.Enqueue(context.Background(), broken, nil, Retries(1)) //nolint:errcheck
 
 	startAndWait(t, q, func() bool { return spy.failedCount() >= 1 })
 
@@ -169,7 +169,7 @@ func TestSpy_UnknownJobType_DeadLetters(t *testing.T) {
 	spy := newSpy()
 	q := newSpyQueue(t, spy)
 	// intentionally do not register a handler for "ghost"
-	q.Enqueue(Def("ghost"), nil) //nolint:errcheck
+	q.Enqueue(context.Background(), Def("ghost"), nil) //nolint:errcheck
 
 	startAndWait(t, q, func() bool { return spy.failedCount() >= 1 })
 
@@ -219,7 +219,7 @@ func TestSpy_ErrorMessagePropagated(t *testing.T) {
 	q.Register(errmsg, func(_ context.Context, _ []byte) error {
 		return errors.New(msg)
 	})
-	q.Enqueue(errmsg, nil, Retries(1)) //nolint:errcheck
+	q.Enqueue(context.Background(), errmsg, nil, Retries(1)) //nolint:errcheck
 
 	startAndWait(t, q, func() bool { return spy.failedCount() >= 1 })
 
@@ -248,6 +248,7 @@ func (minimalMock) Claim(_ context.Context, _ int) ([]*Job, error)              
 func (minimalMock) MarkDone(_ context.Context, _ string) error                           { return nil }
 func (minimalMock) MarkFailed(_ context.Context, _ string, _ string, _ *time.Time) error { return nil }
 func (minimalMock) MarkPending(_ context.Context, _ string, _ time.Time) error           { return nil }
+func (minimalMock) RecoverStuck(_ context.Context) error                                 { return nil }
 func (minimalMock) UpsertCron(_ context.Context, _ *CronEntry) error                     { return nil }
 func (minimalMock) DueCrons(_ context.Context) ([]*CronEntry, error)                     { return nil, nil }
 func (minimalMock) UpdateCronRun(_ context.Context, _ string, _, _ time.Time) error      { return nil }

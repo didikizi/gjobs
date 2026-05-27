@@ -80,38 +80,38 @@ func main() {
 	// ── Enqueue initial work ──────────────────────────────────────────────────
 
 	for i := range 5 {
-		_ = q.Enqueue(SendEmail, EmailPayload{
+		_ = q.Enqueue(context.Background(), SendEmail, EmailPayload{
 			To:      fmt.Sprintf("user%d@example.com", i+1),
 			Subject: fmt.Sprintf("Hello from job %d", i+1),
 		})
 	}
 
 	for i := range 4 {
-		_ = q.Enqueue(ChargeCard, ChargePayload{
+		_ = q.Enqueue(context.Background(), ChargeCard, ChargePayload{
 			UserID: fmt.Sprintf("u_%03d", i+1),
 			Amount: float64(10*(i+1)) + 0.99,
 		})
 	}
 
-	_ = q.Enqueue(SyncData, nil)
+	_ = q.Enqueue(context.Background(), SyncData, nil)
 
 	// FlakyReport will fail and retry — visible in the dashboard.
-	_ = q.Enqueue(FlakyReport, nil)
+	_ = q.Enqueue(context.Background(), FlakyReport, nil)
 
 	// Delayed jobs — appear as "pending" with a future run_at time.
-	_ = q.Enqueue(SendEmail,
+	_ = q.Enqueue(context.Background(), SendEmail,
 		EmailPayload{To: "delayed@example.com", Subject: "Delayed message"},
 		jobs.After(30*time.Second),
 	)
-	_ = q.Enqueue(ChargeCard,
+	_ = q.Enqueue(context.Background(), ChargeCard,
 		ChargePayload{UserID: "u_vip", Amount: 199.99},
 		jobs.After(1*time.Minute),
 	)
 
 	// ── Cron: generate background noise every 3 seconds ───────────────────────
 
-	if err := q.Schedule(jobs.Def("heartbeat"), "3s", func(_ context.Context) error {
-		_ = q.Enqueue(SendEmail, EmailPayload{
+	if err := q.Schedule(context.Background(), jobs.Def("heartbeat"), "3s", func(_ context.Context) error {
+		_ = q.Enqueue(context.Background(), SendEmail, EmailPayload{
 			To:      "cron@example.com",
 			Subject: fmt.Sprintf("Heartbeat at %s", time.Now().Format("15:04:05")),
 		})

@@ -1,12 +1,14 @@
 package jobs
 
 import (
+	"fmt"
 	"log"
+	"strings"
 	"time"
 )
 
-// Logger is the interface for queue-level logging. Satisfied by log/slog,
-// zap (via a thin adapter), zerolog, and others.
+// Logger is the interface for queue-level logging. The signature matches
+// *slog.Logger exactly — pass slog.Default() directly without any adapter.
 //
 //	jobs.New(jobs.WithLogger(slog.Default()))
 //	jobs.New(jobs.WithNoLogger(), jobs.WithErrorChannel(ch))
@@ -17,8 +19,23 @@ type Logger interface {
 
 type stdLogger struct{}
 
-func (stdLogger) Info(msg string, args ...any)  { log.Printf("[jobs] INFO  "+msg, args...) }
-func (stdLogger) Error(msg string, args ...any) { log.Printf("[jobs] ERROR "+msg, args...) }
+func (stdLogger) Info(msg string, args ...any)  { log.Println("[jobs] INFO  " + msg + formatKV(args)) }
+func (stdLogger) Error(msg string, args ...any) { log.Println("[jobs] ERROR " + msg + formatKV(args)) }
+
+// formatKV formats key-value pairs as " k=v k=v" for the stdlib logger.
+func formatKV(args []any) string {
+	if len(args) == 0 {
+		return ""
+	}
+	var sb strings.Builder
+	for i := 0; i+1 < len(args); i += 2 {
+		fmt.Fprintf(&sb, " %v=%v", args[i], args[i+1])
+	}
+	if len(args)%2 != 0 {
+		fmt.Fprintf(&sb, " %v", args[len(args)-1])
+	}
+	return sb.String()
+}
 
 type noopLogger struct{}
 
@@ -27,14 +44,15 @@ func (noopLogger) Error(_ string, _ ...any) {}
 
 // config holds Queue-level settings applied via Option.
 type config struct {
-	dbPath       string
-	concurrency  int
-	pollInterval time.Duration
-	backoffBase  time.Duration
-	backoffCap   time.Duration
-	storage      Storage
-	logger       Logger
-	errCh        chan<- JobError
+	dbPath          string
+	concurrency     int
+	pollInterval    time.Duration
+	backoffBase     time.Duration
+	backoffCap      time.Duration
+	shutdownTimeout time.Duration
+	storage         Storage
+	logger          Logger
+	errCh           chan<- JobError
 }
 
 func defaultConfig() config {
@@ -67,7 +85,7 @@ func WithPollInterval(d time.Duration) Option {
 }
 
 // WithBackoffBase sets the initial retry delay (default: 30s).
-// The actual delay for attempt n is: min(base * 2^n, cap).
+// The actual delay for attempt n is: min(base * 2^(n-1), cap).
 func WithBackoffBase(d time.Duration) Option {
 	return func(c *config) { c.backoffBase = d }
 }
@@ -77,14 +95,23 @@ func WithBackoffCap(d time.Duration) Option {
 	return func(c *config) { c.backoffCap = d }
 }
 
+// WithShutdownTimeout sets a deadline for graceful shutdown when Start's context
+// is cancelled. Workers that exceed this deadline are abandoned (jobs stay pending
+// and recover on next restart via RecoverStuck). Default: wait indefinitely.
+//
+//	q, _ := jobs.New(jobs.WithShutdownTimeout(30 * time.Second))
+func WithShutdownTimeout(d time.Duration) Option {
+	return func(c *config) { c.shutdownTimeout = d }
+}
+
 // WithStorage injects a custom Storage backend, bypassing the default SQLite one.
 // Useful for testing (MemoryStorage) or alternative databases (PostgresStorage).
 func WithStorage(s Storage) Option {
 	return func(c *config) { c.storage = s }
 }
 
-// WithLogger sets a custom logger. The interface is satisfied by log/slog,
-// as well as zap, zerolog, logrus (via a thin adapter).
+// WithLogger sets a custom logger. The Logger interface matches *slog.Logger exactly,
+// so slog.Default() can be passed directly.
 //
 //	jobs.New(jobs.WithLogger(slog.Default()))
 func WithLogger(l Logger) Option {
@@ -133,7 +160,7 @@ type PushOption func(*pushConfig)
 // Retries sets the maximum number of retry attempts (default: 3).
 // Pass jobs.Unlimited (-1) to retry indefinitely.
 //
-//	q.Push("job", data, jobs.Retries(jobs.Unlimited))
+//	q.Enqueue(ctx, job, data, jobs.Retries(jobs.Unlimited))
 func Retries(n int) PushOption {
 	return func(c *pushConfig) { c.maxRetries = n }
 }

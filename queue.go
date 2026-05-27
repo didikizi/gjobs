@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/google/uuid"
@@ -19,6 +20,9 @@ type Storage interface {
 	MarkDone(ctx context.Context, id string) error
 	MarkFailed(ctx context.Context, id string, errMsg string, retryAt *time.Time) error
 	MarkPending(ctx context.Context, id string, runAt time.Time) error
+	// RecoverStuck resets any jobs left in 'running' state back to 'pending'.
+	// Call once on startup to recover jobs that were in-flight when the process crashed.
+	RecoverStuck(ctx context.Context) error
 
 	// Cron operations
 	UpsertCron(ctx context.Context, c *CronEntry) error
@@ -43,6 +47,7 @@ type Queue struct {
 	scheduler *cronScheduler
 	stopDash  func(context.Context) // set by Dashboard()
 
+	started  atomic.Bool
 	stopOnce sync.Once
 }
 
@@ -75,10 +80,14 @@ func New(opts ...Option) (*Queue, error) {
 
 // Register registers a handler for the given JobDef.
 // If JobDef.Timeout > 0 the handler context is cancelled after that duration.
+// Panics if called after Start — all handlers must be registered before starting.
 //
 //	var SendEmail = jobs.Def("send_email")
 //	q.Register(SendEmail, handler)
 func (q *Queue) Register(def JobDef, handler HandlerFunc) {
+	if q.started.Load() {
+		panic("jobs: Register called after Start — register all handlers before calling Start")
+	}
 	h := handler
 	if def.Timeout > 0 {
 		h = func(ctx context.Context, payload []byte) error {
@@ -115,7 +124,7 @@ func HandleDef[T any](q *Queue, def JobDef, fn func(ctx context.Context, payload
 //	q.Enqueue(SendEmail, Email{To: "user@example.com"})
 //	q.Enqueue(SendEmail, data, jobs.Retries(10))        // override retries
 //	q.Enqueue(SendEmail, data, jobs.After(time.Minute)) // delayed
-func (q *Queue) Enqueue(def JobDef, payload any, opts ...PushOption) error {
+func (q *Queue) Enqueue(ctx context.Context, def JobDef, payload any, opts ...PushOption) error {
 	merged := make([]PushOption, 0, 1+len(opts))
 	merged = append(merged, Retries(def.MaxRetries))
 	merged = append(merged, opts...)
@@ -124,17 +133,17 @@ func (q *Queue) Enqueue(def JobDef, payload any, opts ...PushOption) error {
 	for _, o := range merged {
 		o(&pcfg)
 	}
-	return q.enqueueRaw(def.Name, payload, pcfg)
+	return q.enqueueRaw(ctx, def.Name, payload, pcfg)
 }
 
 // Schedule registers a recurring job that fires every interval.
 // interval is any Go duration string: "5s", "30m", "2h".
 //
 //	var Heartbeat = jobs.Def("heartbeat")
-//	q.Schedule(Heartbeat, "1m", func(ctx context.Context) error { ... })
-func (q *Queue) Schedule(def JobDef, interval string, fn func(ctx context.Context) error) error {
+//	q.Schedule(ctx, Heartbeat, "1m", func(ctx context.Context) error { ... })
+func (q *Queue) Schedule(ctx context.Context, def JobDef, interval string, fn func(ctx context.Context) error) error {
 	q.Register(def, func(ctx context.Context, _ []byte) error { return fn(ctx) })
-	return q.registerCron(def.Name, interval)
+	return q.registerCron(ctx, def.Name, interval)
 }
 
 // CancelAll cancels the context of every currently running job of the given type.
@@ -153,13 +162,13 @@ func (q *Queue) CancelAll(def JobDef) int {
 
 // ── internals ─────────────────────────────────────────────────────────────────
 
-func (q *Queue) enqueueRaw(name string, payload any, pcfg pushConfig) error {
+func (q *Queue) enqueueRaw(ctx context.Context, name string, payload any, pcfg pushConfig) error {
 	raw, err := json.Marshal(payload)
 	if err != nil {
 		return fmt.Errorf("jobs: marshal payload: %w", err)
 	}
 	now := time.Now()
-	return q.storage.Enqueue(context.Background(), &Job{
+	return q.storage.Enqueue(ctx, &Job{
 		ID:         uuid.New().String(),
 		Type:       name,
 		Payload:    raw,
@@ -172,9 +181,9 @@ func (q *Queue) enqueueRaw(name string, payload any, pcfg pushConfig) error {
 }
 
 // registerCron stores a cron entry; buffers it if called before Start.
-func (q *Queue) registerCron(name, schedule string) error {
+func (q *Queue) registerCron(ctx context.Context, name, schedule string) error {
 	if q.scheduler != nil {
-		return q.scheduler.register(name, schedule)
+		return q.scheduler.register(ctx, name, schedule)
 	}
 	q.mu.Lock()
 	q.pendingCrons = append(q.pendingCrons, cronReg{name: name, schedule: schedule})
@@ -199,23 +208,35 @@ func (q *Queue) Start(ctx context.Context) error {
 	pending := q.pendingCrons
 	q.mu.RUnlock()
 
+	if err := q.storage.RecoverStuck(context.Background()); err != nil {
+		q.cfg.logger.Error("recover stuck jobs on startup", "error", err)
+	}
+
 	q.pool = newWorkerPool(q.storage, handlers, defs, q.cfg.concurrency, q.cfg.pollInterval,
 		q.cfg.backoffBase, q.cfg.backoffCap, q.cfg.logger, q.cfg.errCh)
 
 	q.scheduler = newCronScheduler(q.storage, func(name string) error {
-		return q.enqueueRaw(name, nil, pushConfig{maxRetries: 0, runAt: time.Now()})
+		return q.enqueueRaw(context.Background(), name, nil, pushConfig{maxRetries: 0, runAt: time.Now()})
 	}, q.cfg.logger, q.cfg.pollInterval)
 	for _, cr := range pending {
-		if err := q.scheduler.register(cr.name, cr.schedule); err != nil {
+		if err := q.scheduler.register(context.Background(), cr.name, cr.schedule); err != nil {
 			return err
 		}
 	}
 
+	q.started.Store(true)
 	q.pool.start()
 	q.scheduler.start()
 
 	<-ctx.Done()
-	return q.Stop(context.Background())
+
+	shutdownCtx := context.Background()
+	if q.cfg.shutdownTimeout > 0 {
+		var cancel context.CancelFunc
+		shutdownCtx, cancel = context.WithTimeout(context.Background(), q.cfg.shutdownTimeout)
+		defer cancel()
+	}
+	return q.Stop(shutdownCtx)
 }
 
 // Stop gracefully stops the queue, waiting for in-flight jobs to finish.

@@ -118,6 +118,14 @@ func (p *PostgresStorage) MarkFailed(ctx context.Context, id string, errMsg stri
 	return err
 }
 
+// RecoverStuck resets jobs stuck in 'running' back to 'pending' after a crash.
+func (p *PostgresStorage) RecoverStuck(ctx context.Context) error {
+	_, err := p.pool.Exec(ctx,
+		`UPDATE jobs SET status='pending', updated_at=NOW() WHERE status='running'`,
+	)
+	return err
+}
+
 func (p *PostgresStorage) MarkPending(ctx context.Context, id string, runAt time.Time) error {
 	_, err := p.pool.Exec(ctx,
 		`UPDATE jobs SET status='pending', run_at=$1, updated_at=NOW() WHERE id=$2`,

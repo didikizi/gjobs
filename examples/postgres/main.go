@@ -58,7 +58,7 @@ func main() {
 
 	// Enqueue a batch of notifications.
 	for i := range 5 {
-		_ = q.Enqueue(Notify, Notification{
+		_ = q.Enqueue(context.Background(), Notify, Notification{
 			UserID:  fmt.Sprintf("user-%d", i+1),
 			Message: fmt.Sprintf("Hello from worker %d!", i+1),
 		})
