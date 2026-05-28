@@ -6,7 +6,7 @@ import (
 	"fmt"
 	"time"
 
-	_ "github.com/mattn/go-sqlite3"
+	_ "modernc.org/sqlite"
 )
 
 const schema = `
@@ -43,10 +43,10 @@ type SQLiteStorage struct {
 // applies the schema. A path of ":memory:" is valid for testing.
 func NewSQLiteStorage(path string) (*SQLiteStorage, error) {
 	dsn := fmt.Sprintf(
-		"file:%s?_journal_mode=WAL&_busy_timeout=5000&_foreign_keys=on",
+		"file:%s?_pragma=journal_mode(WAL)&_pragma=busy_timeout(5000)&_pragma=foreign_keys(ON)",
 		path,
 	)
-	db, err := sql.Open("sqlite3", dsn)
+	db, err := sql.Open("sqlite", dsn)
 	if err != nil {
 		return nil, fmt.Errorf("jobs: open db: %w", err)
 	}
@@ -71,15 +71,10 @@ func (s *SQLiteStorage) Enqueue(ctx context.Context, job *Job) error {
 }
 
 // Claim atomically marks up to limit pending jobs as running and returns them.
+// UPDATE...RETURNING is atomic in SQLite so no explicit transaction is needed.
 func (s *SQLiteStorage) Claim(ctx context.Context, limit int) ([]*Job, error) {
-	tx, err := s.db.BeginTx(ctx, nil)
-	if err != nil {
-		return nil, err
-	}
-	defer tx.Rollback() //nolint:errcheck
-
 	now := time.Now().UTC()
-	rows, err := tx.QueryContext(ctx, `
+	rows, err := s.db.QueryContext(ctx, `
 		UPDATE jobs
 		SET status = 'running', updated_at = ?
 		WHERE id IN (
@@ -96,12 +91,7 @@ func (s *SQLiteStorage) Claim(ctx context.Context, limit int) ([]*Job, error) {
 		return nil, err
 	}
 	defer rows.Close()
-
-	jobs, err := scanJobs(rows)
-	if err != nil {
-		return nil, err
-	}
-	return jobs, tx.Commit()
+	return scanJobs(rows)
 }
 
 // MarkDone sets job status to done.

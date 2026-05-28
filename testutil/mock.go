@@ -6,7 +6,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/vkorolev/gjobs"
+	"github.com/didikizi/gjobs"
 )
 
 // Call records a single invocation of a MockStorage method.

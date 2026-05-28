@@ -2,6 +2,7 @@ package jobs
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"html/template"
 	"net"
@@ -31,12 +32,48 @@ type JobStats struct {
 	Failed  int
 }
 
+// DashboardOption configures the dashboard HTTP server.
+type DashboardOption func(*dashConfig)
+
+type dashConfig struct {
+	username string
+	password string
+}
+
+// WithDashboardAuth enables HTTP Basic Auth on the dashboard.
+// Set DASH_PASSWORD via an environment variable; never hard-code credentials.
+//
+//	q.Dashboard(":8080", jobs.WithDashboardAuth("admin", os.Getenv("DASH_PASSWORD")))
+func WithDashboardAuth(username, password string) DashboardOption {
+	return func(c *dashConfig) {
+		c.username = username
+		c.password = password
+	}
+}
+
+func basicAuth(username, password string, next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		u, p, ok := r.BasicAuth()
+		if !ok || u != username || p != password {
+			w.Header().Set("WWW-Authenticate", `Basic realm="jobs dashboard"`)
+			http.Error(w, "Unauthorized", http.StatusUnauthorized)
+			return
+		}
+		next.ServeHTTP(w, r)
+	})
+}
+
 // Dashboard starts an HTTP server on addr and returns it. The server is
 // automatically stopped when the queue is stopped. Returns an error if the
 // storage backend does not implement DashboardStorage.
 //
 //	srv, err := q.Dashboard(":8080")
-func (q *Queue) Dashboard(addr string) (*http.Server, error) {
+//	srv, err := q.Dashboard(":8080", jobs.WithDashboardAuth("admin", os.Getenv("DASH_PASSWORD")))
+func (q *Queue) Dashboard(addr string, opts ...DashboardOption) (*http.Server, error) {
+	cfg := &dashConfig{}
+	for _, o := range opts {
+		o(cfg)
+	}
 	ds, ok := q.storage.(DashboardStorage)
 	if !ok {
 		return nil, fmt.Errorf("jobs: storage does not implement DashboardStorage; use SQLiteStorage, MemoryStorage, or PostgresStorage")
@@ -95,13 +132,19 @@ func (q *Queue) Dashboard(addr string) (*http.Server, error) {
 	mux := http.NewServeMux()
 	mux.HandleFunc("/", h.index)
 	mux.HandleFunc("/retry", h.retry)
+	mux.HandleFunc("/stats.json", h.statsJSON)
+
+	var handler http.Handler = mux
+	if cfg.username != "" {
+		handler = basicAuth(cfg.username, cfg.password, mux)
+	}
 
 	ln, err := net.Listen("tcp", addr)
 	if err != nil {
 		return nil, fmt.Errorf("jobs: dashboard listen %s: %w", addr, err)
 	}
 
-	srv := &http.Server{Handler: mux}
+	srv := &http.Server{Handler: handler}
 	go srv.Serve(ln) //nolint:errcheck
 
 	q.mu.Lock()
@@ -164,6 +207,16 @@ func (h *dashHandler) index(w http.ResponseWriter, r *http.Request) {
 		HasPrev:      page > 1,
 		HasNext:      hasNext,
 	})
+}
+
+func (h *dashHandler) statsJSON(w http.ResponseWriter, r *http.Request) {
+	stats, err := h.storage.Stats(r.Context())
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(stats) //nolint:errcheck
 }
 
 func (h *dashHandler) retry(w http.ResponseWriter, r *http.Request) {

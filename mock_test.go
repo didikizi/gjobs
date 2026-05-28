@@ -239,7 +239,7 @@ func TestMockStorage_ImplementsStorage(t *testing.T) {
 }
 
 // newMockAdapter wraps testutil.MockStorage behind the package boundary.
-// We can't import github.com/vkorolev/gjobs/testutil from package jobs directly (cycle), so we
+// We can't import github.com/didikizi/gjobs/testutil from package jobs directly (cycle), so we
 // recreate a minimal equivalent inline to confirm the interface is satisfied.
 type minimalMock struct{}
 

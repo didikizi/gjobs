@@ -5,6 +5,7 @@
 *.so
 *.dylib
 *.claude
+dashboard
 
 # Test binary
 *.test
@@ -16,6 +17,7 @@
 *.db
 *.db-shm
 *.db-wal
+*.db-journal
 
 # Editor directories
 .idea/

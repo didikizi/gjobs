@@ -12,7 +12,7 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/vkorolev/gjobs"
+	"github.com/didikizi/gjobs"
 )
 
 var (

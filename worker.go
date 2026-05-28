@@ -22,9 +22,11 @@ type workerPool struct {
 	logger       Logger
 	errCh        chan<- JobError
 
-	sem  chan struct{} // semaphore: cap == concurrency
-	wg   sync.WaitGroup
-	done chan struct{}
+	sem    chan struct{} // semaphore: cap == concurrency
+	wg     sync.WaitGroup
+	done   chan struct{}
+	ctx    context.Context    // cancelled on stop(); used to interrupt Claim during shutdown
+	cancel context.CancelFunc
 
 	cancelMu sync.Mutex
 	cancels  map[string]map[string]context.CancelFunc // type → jobID → cancel
@@ -41,6 +43,7 @@ func newWorkerPool(
 	logger Logger,
 	errCh chan<- JobError,
 ) *workerPool {
+	ctx, cancel := context.WithCancel(context.Background())
 	return &workerPool{
 		storage:      s,
 		handlers:     handlers,
@@ -53,6 +56,8 @@ func newWorkerPool(
 		errCh:        errCh,
 		sem:          make(chan struct{}, concurrency),
 		done:         make(chan struct{}),
+		ctx:          ctx,
+		cancel:       cancel,
 		cancels:      make(map[string]map[string]context.CancelFunc),
 	}
 }
@@ -63,6 +68,7 @@ func (p *workerPool) start() {
 }
 
 func (p *workerPool) stop() {
+	p.cancel() // unblocks any in-progress Claim call
 	close(p.done)
 }
 
@@ -86,14 +92,18 @@ func (p *workerPool) pollLoop() {
 }
 
 func (p *workerPool) poll() {
+	// len(p.sem) is a best-effort snapshot; the actual value may change by the
+	// time Claim runs, but that is harmless — Claim returns ≤ free jobs.
 	free := p.concurrency - len(p.sem)
 	if free <= 0 {
 		return
 	}
 
-	ctx := context.Background()
-	jobs, err := p.storage.Claim(ctx, free)
+	jobs, err := p.storage.Claim(p.ctx, free)
 	if err != nil {
+		if p.ctx.Err() != nil {
+			return // shutting down — ignore context-cancellation error
+		}
 		p.logger.Error("claim error", "error", err)
 		return
 	}

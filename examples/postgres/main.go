@@ -19,7 +19,8 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/vkorolev/gjobs"
+	jobs "github.com/didikizi/gjobs"
+	"github.com/didikizi/gjobs/postgres"
 )
 
 type Notification struct {
@@ -37,7 +38,7 @@ func main() {
 
 	ctx := context.Background()
 
-	pg, err := jobs.NewPostgresStorage(ctx, dsn)
+	pg, err := postgres.New(ctx, dsn)
 	if err != nil {
 		log.Fatalf("connect postgres: %v", err)
 	}
@@ -58,7 +59,7 @@ func main() {
 
 	// Enqueue a batch of notifications.
 	for i := range 5 {
-		_ = q.Enqueue(context.Background(), Notify, Notification{
+		_ = q.Enqueue(ctx, Notify, Notification{
 			UserID:  fmt.Sprintf("user-%d", i+1),
 			Message: fmt.Sprintf("Hello from worker %d!", i+1),
 		})
