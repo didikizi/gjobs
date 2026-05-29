@@ -2,6 +2,7 @@ package jobs
 
 import (
 	"context"
+	"crypto/subtle"
 	"encoding/json"
 	"fmt"
 	"html/template"
@@ -54,7 +55,9 @@ func WithDashboardAuth(username, password string) DashboardOption {
 func basicAuth(username, password string, next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		u, p, ok := r.BasicAuth()
-		if !ok || u != username || p != password {
+		userOK := subtle.ConstantTimeCompare([]byte(u), []byte(username)) == 1
+		passOK := subtle.ConstantTimeCompare([]byte(p), []byte(password)) == 1
+		if !ok || !userOK || !passOK {
 			w.Header().Set("WWW-Authenticate", `Basic realm="jobs dashboard"`)
 			http.Error(w, "Unauthorized", http.StatusUnauthorized)
 			return

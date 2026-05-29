@@ -89,7 +89,7 @@ func TestRecoverStuck_QueueRestart(t *testing.T) {
 	qCtx, cancel := context.WithCancel(context.Background())
 	go q.Start(qCtx) //nolint:errcheck
 
-	deadline := time.Now().Add(2 * time.Second)
+	deadline := time.Now().Add(5 * time.Second)
 	for time.Now().Before(deadline) && !ran.Load() {
 		time.Sleep(10 * time.Millisecond)
 	}

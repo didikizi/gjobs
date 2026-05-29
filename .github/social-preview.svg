@@ -1,0 +1,94 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1280" height="640" viewBox="0 0 1280 640">
+  <defs>
+    <linearGradient id="bg" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%"   stop-color="#0f172a"/>
+      <stop offset="100%" stop-color="#1e293b"/>
+    </linearGradient>
+    <linearGradient id="glow" x1="0%" y1="0%" x2="100%" y2="0%">
+      <stop offset="0%"   stop-color="#38bdf8" stop-opacity="0"/>
+      <stop offset="50%"  stop-color="#38bdf8" stop-opacity="0.15"/>
+      <stop offset="100%" stop-color="#38bdf8" stop-opacity="0"/>
+    </linearGradient>
+  </defs>
+
+  <!-- background -->
+  <rect width="1280" height="640" fill="url(#bg)"/>
+
+  <!-- subtle grid lines -->
+  <g stroke="#1e3a5f" stroke-width="1" opacity="0.4">
+    <line x1="0" y1="160" x2="1280" y2="160"/>
+    <line x1="0" y1="320" x2="1280" y2="320"/>
+    <line x1="0" y1="480" x2="1280" y2="480"/>
+    <line x1="320" y1="0" x2="320" y2="640"/>
+    <line x1="640" y1="0" x2="640" y2="640"/>
+    <line x1="960" y1="0" x2="960" y2="640"/>
+  </g>
+
+  <!-- horizontal accent glow bar -->
+  <rect x="0" y="290" width="1280" height="60" fill="url(#glow)"/>
+
+  <!-- left accent bar -->
+  <rect x="96" y="200" width="4" height="240" rx="2" fill="#38bdf8" opacity="0.8"/>
+
+  <!-- lightning bolt + name -->
+  <text x="120" y="298" font-family="-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,monospace" font-size="88" font-weight="800" fill="#f8fafc" letter-spacing="-3">⚡ gjobs</text>
+
+  <!-- tagline -->
+  <text x="122" y="358" font-family="-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif" font-size="28" font-weight="400" fill="#94a3b8" letter-spacing="0.2">Persistent background jobs for Go · just a file · no Redis · no Docker</text>
+
+  <!-- pill badges row -->
+  <g font-family="-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,monospace" font-size="18" font-weight="600">
+
+    <!-- SQLite pill -->
+    <rect x="122" y="400" width="130" height="36" rx="18" fill="#0f2944" stroke="#38bdf8" stroke-width="1.5"/>
+    <text x="187" y="423" text-anchor="middle" fill="#38bdf8">SQLite</text>
+
+    <!-- pure Go pill -->
+    <rect x="268" y="400" width="128" height="36" rx="18" fill="#0f2944" stroke="#38bdf8" stroke-width="1.5"/>
+    <text x="332" y="423" text-anchor="middle" fill="#38bdf8">Pure Go</text>
+
+    <!-- no CGO pill -->
+    <rect x="412" y="400" width="118" height="36" rx="18" fill="#0f2944" stroke="#38bdf8" stroke-width="1.5"/>
+    <text x="471" y="423" text-anchor="middle" fill="#38bdf8">no CGO</text>
+
+    <!-- crash-safe pill -->
+    <rect x="546" y="400" width="152" height="36" rx="18" fill="#0f2944" stroke="#22c55e" stroke-width="1.5"/>
+    <text x="622" y="423" text-anchor="middle" fill="#22c55e">crash-safe</text>
+
+    <!-- retries pill -->
+    <rect x="714" y="400" width="116" height="36" rx="18" fill="#0f2944" stroke="#22c55e" stroke-width="1.5"/>
+    <text x="772" y="423" text-anchor="middle" fill="#22c55e">retries</text>
+
+    <!-- cron pill -->
+    <rect x="846" y="400" width="90" height="36" rx="18" fill="#0f2944" stroke="#22c55e" stroke-width="1.5"/>
+    <text x="891" y="423" text-anchor="middle" fill="#22c55e">cron</text>
+
+  </g>
+
+  <!-- code snippet -->
+  <rect x="122" y="460" width="680" height="108" rx="8" fill="#0f172a" stroke="#334155" stroke-width="1"/>
+  <text x="148" y="488" font-family="'Cascadia Code','Fira Code',ui-monospace,monospace" font-size="19" fill="#64748b">var</text>
+  <text x="186" y="488" font-family="'Cascadia Code','Fira Code',ui-monospace,monospace" font-size="19" fill="#f8fafc">SendEmail</text>
+  <text x="320" y="488" font-family="'Cascadia Code','Fira Code',ui-monospace,monospace" font-size="19" fill="#64748b">=</text>
+  <text x="338" y="488" font-family="'Cascadia Code','Fira Code',ui-monospace,monospace" font-size="19" fill="#38bdf8">jobs</text>
+  <text x="380" y="488" font-family="'Cascadia Code','Fira Code',ui-monospace,monospace" font-size="19" fill="#94a3b8">.Def(</text>
+  <text x="440" y="488" font-family="'Cascadia Code','Fira Code',ui-monospace,monospace" font-size="19" fill="#86efac">"send_email"</text>
+  <text x="572" y="488" font-family="'Cascadia Code','Fira Code',ui-monospace,monospace" font-size="19" fill="#94a3b8">)</text>
+
+  <text x="148" y="520" font-family="'Cascadia Code','Fira Code',ui-monospace,monospace" font-size="19" fill="#38bdf8">q</text>
+  <text x="164" y="520" font-family="'Cascadia Code','Fira Code',ui-monospace,monospace" font-size="19" fill="#94a3b8">.Enqueue(ctx, SendEmail, Email{To:</text>
+  <text x="530" y="520" font-family="'Cascadia Code','Fira Code',ui-monospace,monospace" font-size="19" fill="#86efac">"alice@…"</text>
+  <text x="634" y="520" font-family="'Cascadia Code','Fira Code',ui-monospace,monospace" font-size="19" fill="#94a3b8">})</text>
+
+  <text x="148" y="552" font-family="'Cascadia Code','Fira Code',ui-monospace,monospace" font-size="19" fill="#38bdf8">q</text>
+  <text x="164" y="552" font-family="'Cascadia Code','Fira Code',ui-monospace,monospace" font-size="19" fill="#94a3b8">.Start(ctx)</text>
+
+  <!-- version badge top-right -->
+  <rect x="1088" y="48" width="144" height="44" rx="22" fill="#1e293b" stroke="#475569" stroke-width="1.5"/>
+  <text x="1160" y="76" text-anchor="middle" font-family="-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,monospace" font-size="20" font-weight="700" fill="#94a3b8">v0.2.0</text>
+
+  <!-- Go version badge -->
+  <rect x="1088" y="108" width="144" height="44" rx="22" fill="#00ADD820" stroke="#00ADD8" stroke-width="1.5"/>
+  <text x="1160" y="136" text-anchor="middle" font-family="-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,monospace" font-size="20" font-weight="700" fill="#00ADD8">Go 1.25+</text>
+
+</svg>

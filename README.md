@@ -4,7 +4,7 @@
 
 **Persistent background jobs for Go. Just a file. No Redis, no Postgres, no Docker.**
 
-[![Go Version](https://img.shields.io/badge/Go-1.22+-00ADD8?style=flat-square&logo=go&logoColor=white)](https://go.dev)
+[![Go Version](https://img.shields.io/badge/Go-1.25+-00ADD8?style=flat-square&logo=go&logoColor=white)](https://go.dev)
 [![License](https://img.shields.io/badge/license-MIT-green?style=flat-square)](#license)
 [![SQLite](https://img.shields.io/badge/storage-SQLite%20%7C%20Postgres%20%7C%20Memory-blue?style=flat-square)](#-storage-backends)
 [![CI](https://github.com/didikizi/gjobs/actions/workflows/ci.yml/badge.svg)](https://github.com/didikizi/gjobs/actions/workflows/ci.yml)
@@ -82,7 +82,7 @@ Jobs persist across restarts, retry on failure, and survive `kill -9`. Zero conf
 go get github.com/didikizi/gjobs
 ```
 
-> **Requirements:** Go 1.22+. Pure Go — no CGO, no GCC required.
+> **Requirements:** Go 1.25+. Pure Go — no CGO, no GCC required.
 > Cross-compiles to Linux from macOS: `GOOS=linux go build ./...`
 
 ---
@@ -361,7 +361,3 @@ mock.ClaimFn = func(ctx context.Context, n int) ([]*jobs.Job, error) { ... }
 ## 📄 License
 
 MIT — see [LICENSE](LICENSE).
-
----
-
-*[Русская документация](README_RU.md)*
