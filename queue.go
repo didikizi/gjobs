@@ -11,27 +11,6 @@ import (
 	"github.com/google/uuid"
 )
 
-// Storage is the persistence layer. Implement this interface to add a new backend
-// (e.g. MySQL, Redis) without changing any other code.
-type Storage interface {
-	// Job operations
-	Enqueue(ctx context.Context, job *Job) error
-	Claim(ctx context.Context, limit int) ([]*Job, error)
-	MarkDone(ctx context.Context, id string) error
-	MarkFailed(ctx context.Context, id string, errMsg string, retryAt *time.Time) error
-	MarkPending(ctx context.Context, id string, runAt time.Time) error
-	// RecoverStuck resets any jobs left in 'running' state back to 'pending'.
-	// Call once on startup to recover jobs that were in-flight when the process crashed.
-	RecoverStuck(ctx context.Context) error
-
-	// Cron operations
-	UpsertCron(ctx context.Context, c *CronEntry) error
-	DueCrons(ctx context.Context) ([]*CronEntry, error)
-	UpdateCronRun(ctx context.Context, name string, last, next time.Time) error
-
-	Close() error
-}
-
 // Queue is the main entry point. Create one with New, register handlers with
 // Register/HandleDef/Schedule, push work with Enqueue, then call Start.
 type Queue struct {

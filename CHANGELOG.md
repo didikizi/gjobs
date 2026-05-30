@@ -2,7 +2,44 @@
 
 All notable changes to this project will be documented in this file.
 
-## [0.2.0] - 2026-05-27
+## [0.4.0] - 2026-05-30
+
+### Breaking Changes
+
+- **PostgreSQL backend removed.** The `github.com/didikizi/gjobs/postgres`
+  subpackage and `examples/postgres` are deleted. gjobs is now a
+  single-machine, SQLite-only library. Users who need multi-machine
+  processing should use [River](https://riverqueue.com) or
+  [asynq](https://github.com/hibiken/asynq).
+
+### Changed
+
+- **Minimum Go version lowered to 1.22** (was 1.25).
+  Downgraded `modernc.org/sqlite` to v1.36.1 — the last version whose
+  full transitive dependency graph stays within Go 1.22.
+  Removed `pgx/v5` from the module entirely.
+- **CI matrix** now tests on Go 1.22, 1.23, 1.24, and 1.25.
+- **Project layout:** `Storage` interface, `DashboardStorage` interface,
+  and `JobStats` extracted from `queue.go`/`dashboard.go` into a
+  dedicated `storage.go` — the full storage contract is now in one place.
+- **README** — removed `README_RU.md`; English README is the single
+  source of truth.
+
+### Fixed
+
+- **Timing attack in dashboard `basicAuth`:** username and password
+  comparisons now use `crypto/subtle.ConstantTimeCompare` instead of `==`.
+- **Flaky test:** `TestRecoverStuck_QueueRestart` timeout raised 2s → 5s
+  to prevent spurious failures under `-race` on loaded CI runners.
+
+### Added
+
+- `.github/social-preview.svg` — 1280×640 social preview image for the
+  GitHub repository (upload via Settings → Social preview).
+
+---
+
+## [0.3.0] - 2026-05-27
 
 ### Breaking Changes
 
@@ -54,7 +91,7 @@ All notable changes to this project will be documented in this file.
 
 ---
 
-## [0.1.0] - 2025-05-26
+## [0.2.0] - 2026-05-26
 
 ### Added
 - SQLite storage backend (WAL mode, CGO via `mattn/go-sqlite3`)

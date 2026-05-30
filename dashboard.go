@@ -12,27 +12,6 @@ import (
 	"time"
 )
 
-// DashboardStorage extends Storage with listing and retry capabilities used
-// by the web dashboard. All built-in backends (SQLite, Memory, Postgres)
-// implement this interface. Custom backends can add these three methods to
-// unlock q.Dashboard().
-type DashboardStorage interface {
-	// Stats returns per-status job counts.
-	Stats(ctx context.Context) (JobStats, error)
-	// Jobs returns jobs ordered by updated_at DESC. status="" means all statuses.
-	Jobs(ctx context.Context, status Status, limit, offset int) ([]*Job, error)
-	// RetryJob moves a failed job back to pending with attempts reset to 0.
-	RetryJob(ctx context.Context, id string) error
-}
-
-// JobStats holds per-status job counts.
-type JobStats struct {
-	Pending int
-	Running int
-	Done    int
-	Failed  int
-}
-
 // DashboardOption configures the dashboard HTTP server.
 type DashboardOption func(*dashConfig)
 
@@ -79,7 +58,7 @@ func (q *Queue) Dashboard(addr string, opts ...DashboardOption) (*http.Server, e
 	}
 	ds, ok := q.storage.(DashboardStorage)
 	if !ok {
-		return nil, fmt.Errorf("jobs: storage does not implement DashboardStorage; use SQLiteStorage, MemoryStorage, or PostgresStorage")
+		return nil, fmt.Errorf("jobs: storage does not implement DashboardStorage; use SQLiteStorage or MemoryStorage")
 	}
 
 	tmpl, err := template.New("dash").Funcs(template.FuncMap{

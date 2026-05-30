@@ -4,9 +4,9 @@
 
 **Persistent background jobs for Go. Just a file. No Redis, no Postgres, no Docker.**
 
-[![Go Version](https://img.shields.io/badge/Go-1.25+-00ADD8?style=flat-square&logo=go&logoColor=white)](https://go.dev)
+[![Go Version](https://img.shields.io/badge/Go-1.22+-00ADD8?style=flat-square&logo=go&logoColor=white)](https://go.dev)
 [![License](https://img.shields.io/badge/license-MIT-green?style=flat-square)](#license)
-[![SQLite](https://img.shields.io/badge/storage-SQLite%20%7C%20Postgres%20%7C%20Memory-blue?style=flat-square)](#-storage-backends)
+[![SQLite](https://img.shields.io/badge/storage-SQLite%20%7C%20Memory-blue?style=flat-square)](#-storage-backends)
 [![CI](https://github.com/didikizi/gjobs/actions/workflows/ci.yml/badge.svg)](https://github.com/didikizi/gjobs/actions/workflows/ci.yml)
 
 [Quick start](#-quick-start) · [Who this is for](#-who-this-is-for) · [Crash safety](#-crash-safety) · [Storage](#-storage-backends) · [API](#-api-reference)
@@ -21,7 +21,7 @@ gjobs is for Go apps that run on **a single machine and need reliable background
 
 It's the right fit if you deploy on **Fly.io, Railway, Hetzner, or any VPS** where adding a Redis instance feels like overkill. It works especially well with **Litestream** — WAL mode is enabled by default, so your job queue replicates for free.
 
-It's the wrong fit if you need **multiple machines processing the same queue simultaneously** — use the [PostgreSQL backend](#postgresql) or switch to a dedicated broker.
+It's the wrong fit if you need **multiple machines processing the same queue simultaneously** — switch to a dedicated broker (River, asynq).
 
 ---
 
@@ -50,7 +50,7 @@ var SendEmail = jobs.Def("send_email")
 
 func main() {
     q, _ := jobs.New(
-        jobs.WithLogger(slog.Default()), // *slog.Logger works directly
+        jobs.WithLogger(slog.Default()),
         jobs.WithShutdownTimeout(30 * time.Second),
     )
 
@@ -82,7 +82,7 @@ Jobs persist across restarts, retry on failure, and survive `kill -9`. Zero conf
 go get github.com/didikizi/gjobs
 ```
 
-> **Requirements:** Go 1.25+. Pure Go — no CGO, no GCC required.
+> **Requirements:** Go 1.22+. Pure Go — no CGO, no GCC required.
 > Cross-compiles to Linux from macOS: `GOOS=linux go build ./...`
 
 ---
@@ -91,7 +91,7 @@ go get github.com/didikizi/gjobs
 
 **What happens when your process is killed mid-job?**
 
-gjobs stores job state in SQLite (or Postgres). On every `Start()`, the queue calls `RecoverStuck()`, which resets any jobs left in `running` state back to `pending`. They will be picked up and re-executed by the next run.
+gjobs stores job state in SQLite. On every `Start()`, the queue calls `RecoverStuck()`, which resets any jobs left in `running` state back to `pending`. They will be picked up and re-executed by the next run.
 
 ```
 Process A starts job → kill -9 → job stays "running" in DB
@@ -227,7 +227,7 @@ Schedules persist in the database. Missed runs fire once on restart.
 
 ## 🗄️ Storage backends
 
-### SQLite (default) — recommended starting point
+### SQLite (default)
 
 ```go
 q, _ := jobs.New()                             // → jobs.db in cwd
@@ -243,17 +243,6 @@ q, _ := jobs.New(jobs.WithStorage(jobs.NewMemoryStorage()))
 ```
 
 No disk. Jobs lost on exit. Use in tests and CI.
-
-### PostgreSQL — for multi-machine deployments
-
-```go
-import "github.com/didikizi/gjobs/postgres"
-
-pg, err := postgres.New(ctx, "postgres://user:pass@host/db?sslmode=disable")
-q, _ := jobs.New(jobs.WithStorage(pg))
-```
-
-Uses `FOR UPDATE SKIP LOCKED`. Multiple processes can share the same database. Import only if you need it — the subpackage keeps pgx out of SQLite-only binaries.
 
 ---
 
@@ -334,8 +323,7 @@ go func() {
 
 |  | Infrastructure | Multi-machine | Persistent |
 |--|:-:|:-:|:-:|
-| **gjobs** (SQLite) | none — just a file | ❌ | ✅ |
-| **gjobs** (Postgres) | Postgres server | ✅ | ✅ |
+| **gjobs** | none — just a file | ❌ | ✅ |
 | [River](https://riverqueue.com) | Postgres server | ✅ | ✅ |
 | [asynq](https://github.com/hibiken/asynq) | Redis server | ✅ | ✅ |
 | [machinery](https://github.com/RichardKnop/machinery) | Redis / AMQP | ✅ | ✅ |
