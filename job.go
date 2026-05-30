@@ -113,11 +113,11 @@ func (d JobDef) WithTimeout(t time.Duration) JobDef {
 }
 
 // WithBackoff returns a copy with per-job backoff overrides.
-// base is the initial delay (default: 30s), cap is the maximum delay (default: 1h).
+// base is the initial delay (default: 30s), max is the maximum delay (default: 1h).
 //
 //	var HeavyJob = jobs.Def("heavy_job").WithBackoff(1*time.Minute, 6*time.Hour)
-func (d JobDef) WithBackoff(base, cap time.Duration) JobDef {
+func (d JobDef) WithBackoff(base, max time.Duration) JobDef {
 	d.BackoffBase = base
-	d.BackoffCap = cap
+	d.BackoffCap = max
 	return d
 }
