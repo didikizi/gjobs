@@ -37,6 +37,7 @@ import (
     "os"
     "os/signal"
     "syscall"
+    "time"
 
     "github.com/didikizi/gjobs"
 )
@@ -49,6 +50,9 @@ type Email struct {
 var SendEmail = jobs.Def("send_email")
 
 func main() {
+    ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+    defer stop()
+
     q, _ := jobs.New(
         jobs.WithLogger(slog.Default()),
         jobs.WithShutdownTimeout(30 * time.Second),
@@ -61,10 +65,6 @@ func main() {
 
     // Push work from anywhere — an HTTP handler, a cron, another goroutine.
     q.Enqueue(ctx, SendEmail, Email{To: "alice@example.com", Subject: "Welcome!"})
-
-    // Graceful shutdown: wait up to 30s for in-flight jobs on SIGTERM.
-    ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
-    defer stop()
 
     if err := q.Start(ctx); err != nil {
         slog.Error("queue stopped", "error", err)
@@ -120,9 +120,9 @@ var (
 
 | Method | Description |
 |--------|-------------|
-| `.WithRetries(n)` | Max retry attempts (default: 3) |
+| `.WithAttempts(n)` | Total execution attempts (default: 3). Pass `Unlimited` to retry forever. |
 | `.WithTimeout(d)` | Cancel handler context after duration |
-| `.WithBackoff(base, cap)` | Override retry delays for this job |
+| `.WithBackoff(base, max)` | Override retry delays for this job |
 
 ---
 
@@ -153,8 +153,8 @@ ctx := context.Background()
 
 q.Enqueue(ctx, SendEmail, Email{To: "alice@example.com"})
 
-// Override retries for a single push.
-q.Enqueue(ctx, ChargeCard, payment, jobs.Retries(15))
+// Override attempts for a single push.
+q.Enqueue(ctx, ChargeCard, payment, jobs.Attempts(15))
 
 // Delayed — run after 10 minutes.
 q.Enqueue(ctx, SendEmail, data, jobs.After(10*time.Minute))
@@ -167,7 +167,7 @@ q.Enqueue(ctx, GenerateReport, data, jobs.At(billingDate))
 
 ## 🔁 Retries & dead-letter
 
-Failed jobs retry with **exponential backoff**: `base × 2^(attempt-1)`, capped at `cap`.
+Failed jobs retry with **exponential backoff**: `base × 2^(attempt-1)`, capped at `max`.
 
 | Attempt | Default delay (base=30s, cap=1h) |
 |:-------:|:--------------------------------:|
@@ -188,7 +188,7 @@ q, _ := jobs.New(
 )
 
 // Per-job override via JobDef.
-var HeavySync = jobs.Def("heavy_sync").WithBackoff(2*time.Minute, 12*time.Hour)
+var HeavySync = jobs.Def("heavy_sync").WithAttempts(5).WithBackoff(2*time.Minute, 12*time.Hour)
 ```
 
 ---
@@ -243,6 +243,8 @@ q, _ := jobs.New(jobs.WithStorage(jobs.NewMemoryStorage()))
 ```
 
 No disk. Jobs lost on exit. Use in tests and CI.
+
+> **Schema:** gjobs creates its tables automatically on first run. There are no migration tools — the schema is stable within a major version. If you need to reset, deleting `jobs.db` is safe; no other data is stored there.
 
 ---
 

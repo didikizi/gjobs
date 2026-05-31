@@ -305,7 +305,7 @@ tbody tr:hover{background:#fafbff}
           <td><span class="mono">{{short .ID}}</span></td>
           <td><b>{{.Type}}</b></td>
           <td><span class="badge b-{{.Status}}">{{.Status}}</span></td>
-          <td class="mono">{{.Attempts}}&thinsp;/&thinsp;{{retries .MaxRetries}}</td>
+          <td class="mono">{{.Attempts}}&thinsp;/&thinsp;{{retries .MaxAttempts}}</td>
           <td class="ttime">
             {{fmtTime .RunAt}}
             {{if and (eq .Status "pending") (isFuture .RunAt)}}<br><span style="color:#f59e0b;font-size:11px;font-weight:600">{{relTime .RunAt}}</span>{{end}}

@@ -21,9 +21,9 @@ import (
 
 var (
 	SendEmail   = jobs.Def("send_email")
-	ChargeCard  = jobs.Def("charge_card").WithRetries(5).WithTimeout(10 * time.Second)
-	SyncData    = jobs.Def("sync_data").WithRetries(jobs.Unlimited)
-	FlakyReport = jobs.Def("flaky_report").WithRetries(2)
+	ChargeCard  = jobs.Def("charge_card").WithAttempts(5).WithTimeout(10 * time.Second)
+	SyncData    = jobs.Def("sync_data").WithAttempts(jobs.Unlimited)
+	FlakyReport = jobs.Def("flaky_report").WithAttempts(2)
 )
 
 // ── Payloads ───────────────────────────────────────────────────────────────────

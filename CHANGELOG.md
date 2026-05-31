@@ -2,6 +2,39 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.4.1] - 2026-05-30
+
+### Breaking Changes
+
+- **`Job.MaxRetries` renamed to `Job.MaxAttempts`.**
+  `JobDef.MaxRetries` → `JobDef.MaxAttempts`,
+  `JobDef.WithRetries(n)` → `JobDef.WithAttempts(n)`,
+  `Retries(n) PushOption` → `Attempts(n) PushOption`.
+  The field now unambiguously means *total execution attempts* (not
+  retries after the first). Semantics unchanged: default 3 = 3 attempts.
+- **`WithBackoff(base, cap)`** second parameter renamed to **`max`.**
+  `cap` shadowed the Go builtin of the same name.
+
+### Fixed
+
+- **`storage.go` was missing from the v0.4.0 commit** — `Storage`,
+  `DashboardStorage`, and `JobStats` were extracted from `queue.go` and
+  `dashboard.go` but the new file was not staged, causing 43 compile
+  errors on CI. This release adds the file.
+- **Quick Start example in README did not compile:**
+  missing `"time"` import and `ctx` used before its declaration.
+  `ctx, stop := signal.NotifyContext(...)` now appears before `q.Enqueue`.
+
+### Changed
+
+- **`examples/basic`** reduced from 107 to 38 lines — one job type,
+  no noise. Complex patterns stay in `examples/jobdef` and
+  `examples/errors`.
+- **README** — schema note added: deleting `jobs.db` is safe; no
+  migration tooling is planned within a major version.
+
+---
+
 ## [0.4.0] - 2026-05-30
 
 ### Breaking Changes
@@ -19,23 +52,21 @@ All notable changes to this project will be documented in this file.
   full transitive dependency graph stays within Go 1.22.
   Removed `pgx/v5` from the module entirely.
 - **CI matrix** now tests on Go 1.22, 1.23, 1.24, and 1.25.
-- **Project layout:** `Storage` interface, `DashboardStorage` interface,
-  and `JobStats` extracted from `queue.go`/`dashboard.go` into a
-  dedicated `storage.go` — the full storage contract is now in one place.
+- **Project layout:** `Storage`, `DashboardStorage`, and `JobStats`
+  extracted from `queue.go`/`dashboard.go` into a dedicated `storage.go`.
 - **README** — removed `README_RU.md`; English README is the single
   source of truth.
 
 ### Fixed
 
-- **Timing attack in dashboard `basicAuth`:** username and password
-  comparisons now use `crypto/subtle.ConstantTimeCompare` instead of `==`.
-- **Flaky test:** `TestRecoverStuck_QueueRestart` timeout raised 2s → 5s
-  to prevent spurious failures under `-race` on loaded CI runners.
+- **Timing attack in dashboard `basicAuth`:** comparisons now use
+  `crypto/subtle.ConstantTimeCompare` instead of `==`.
+- **Flaky test:** `TestRecoverStuck_QueueRestart` deadline raised
+  2s → 5s to prevent spurious failures under `-race` on loaded CI runners.
 
 ### Added
 
-- `.github/social-preview.svg` — 1280×640 social preview image for the
-  GitHub repository (upload via Settings → Social preview).
+- `.github/social-preview.svg` — 1280×640 social preview image.
 
 ---
 
@@ -47,10 +78,8 @@ All notable changes to this project will be documented in this file.
   Migrate: `q.Enqueue(def, payload)` → `q.Enqueue(ctx, def, payload)`
 - **Logger interface uses key-value pairs (slog-style), not Printf format.**
   `*slog.Logger` now satisfies `jobs.Logger` directly — no adapter needed.
-  If you used `stdLogger`-style adapters with `%v` placeholders, switch to k-v pairs.
 - **`PostgresStorage` moved to `github.com/didikizi/gjobs/postgres` subpackage.**
   Migrate: `jobs.NewPostgresStorage(ctx, dsn)` → `postgres.New(ctx, dsn)`
-  This keeps pgx out of the binary for users who only need SQLite.
 
 ### Fixed
 
@@ -60,10 +89,9 @@ All notable changes to this project will be documented in this file.
   or leaves the job stuck in `running`. The panic is caught, turned into an error,
   and the normal retry/dead-letter logic applies. `last_error` contains `"panic: ..."`.
 - **Backoff formula:** Fixed `base × 2^attempt` → `base × 2^(attempt-1)` so that
-  attempt 1 = 30s, attempt 2 = 1m, attempt 3 = 2m — matches the documented table.
-- **`MarkDone` context race:** Bookkeeping calls (`MarkDone`, `MarkFailed`) now use
-  `context.Background()` so a concurrent `CancelAll` can no longer prevent status
-  updates from reaching storage.
+  attempt 1 = 30s, attempt 2 = 1m, attempt 3 = 2m.
+- **`MarkDone` context race:** Bookkeeping calls now use `context.Background()`
+  so a concurrent `CancelAll` can no longer prevent status updates from reaching storage.
 - **Shutdown deadline:** `Start()` no longer calls `Stop(context.Background())`.
   Use the new `WithShutdownTimeout` option to set a graceful drain deadline.
 - **Register after Start:** Calling `Register` after `Start` now panics with a
@@ -72,22 +100,16 @@ All notable changes to this project will be documented in this file.
 ### Added
 
 - `Storage.RecoverStuck(ctx)` — new interface method; all built-in backends implement it.
-- `WithShutdownTimeout(d)` option — configures the maximum time `Start` waits for
-  in-flight jobs to finish before returning. Default: wait indefinitely.
+- `WithShutdownTimeout(d)` option.
 - `WithDashboardAuth(username, password)` — HTTP Basic Auth for the dashboard.
-- `GET /stats.json` endpoint on the dashboard — returns `JobStats` as JSON for
-  health checks and Prometheus integrations.
-- Cancellable context in `workerPool.poll()` — a hung `Claim` call is now
-  interrupted immediately when the queue shuts down.
+- `GET /stats.json` endpoint on the dashboard.
+- Cancellable context in `workerPool.poll()`.
 
 ### Changed
 
 - **SQLite driver:** Replaced `mattn/go-sqlite3` (CGO) with `modernc.org/sqlite`
-  (pure Go). No GCC required. Enables `GOOS=linux GOARCH=amd64` cross-compilation
-  from macOS and CGO-free Alpine container builds.
-- **SQLite `Claim`:** Removed unnecessary `BEGIN`/`COMMIT` wrapper — the
-  `UPDATE…RETURNING` statement is already atomic in SQLite.
-- `go.mod` minimum Go version updated to reflect actual requirements.
+  (pure Go). No GCC required. Cross-compilation from macOS works out of the box.
+- **SQLite `Claim`:** Removed unnecessary `BEGIN`/`COMMIT` wrapper.
 
 ---
 

@@ -97,15 +97,15 @@ func HandleDef[T any](q *Queue, def JobDef, fn func(ctx context.Context, payload
 	})
 }
 
-// Enqueue adds a job to the queue. Uses def.MaxRetries as the default retry
-// count; caller options override it.
+// Enqueue adds a job to the queue. Uses def.MaxAttempts as the default;
+// caller options override it.
 //
-//	q.Enqueue(SendEmail, Email{To: "user@example.com"})
-//	q.Enqueue(SendEmail, data, jobs.Retries(10))        // override retries
-//	q.Enqueue(SendEmail, data, jobs.After(time.Minute)) // delayed
+//	q.Enqueue(ctx, SendEmail, Email{To: "user@example.com"})
+//	q.Enqueue(ctx, SendEmail, data, jobs.Attempts(10))       // override attempts
+//	q.Enqueue(ctx, SendEmail, data, jobs.After(time.Minute)) // delayed
 func (q *Queue) Enqueue(ctx context.Context, def JobDef, payload any, opts ...PushOption) error {
 	merged := make([]PushOption, 0, 1+len(opts))
-	merged = append(merged, Retries(def.MaxRetries))
+	merged = append(merged, Attempts(def.MaxAttempts))
 	merged = append(merged, opts...)
 
 	pcfg := defaultPushConfig()
@@ -152,7 +152,7 @@ func (q *Queue) enqueueRaw(ctx context.Context, name string, payload any, pcfg p
 		Type:       name,
 		Payload:    raw,
 		Status:     StatusPending,
-		MaxRetries: pcfg.maxRetries,
+		MaxAttempts: pcfg.maxAttempts,
 		RunAt:      pcfg.runAt,
 		CreatedAt:  now,
 		UpdatedAt:  now,
@@ -195,7 +195,7 @@ func (q *Queue) Start(ctx context.Context) error {
 		q.cfg.backoffBase, q.cfg.backoffCap, q.cfg.logger, q.cfg.errCh)
 
 	q.scheduler = newCronScheduler(q.storage, func(name string) error {
-		return q.enqueueRaw(context.Background(), name, nil, pushConfig{maxRetries: 0, runAt: time.Now()})
+		return q.enqueueRaw(context.Background(), name, nil, pushConfig{maxAttempts: 0, runAt: time.Now()})
 	}, q.cfg.logger, q.cfg.pollInterval)
 	for _, cr := range pending {
 		if err := q.scheduler.register(context.Background(), cr.name, cr.schedule); err != nil {

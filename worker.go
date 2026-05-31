@@ -170,7 +170,7 @@ func (p *workerPool) dispatch(job *Job) {
 
 		def := p.defs[job.Type]
 		attempt := job.Attempts + 1
-		if isRetryable(attempt, job.MaxRetries) {
+		if isRetryable(attempt, job.MaxAttempts) {
 			retryAt := time.Now().Add(p.calcBackoff(def, attempt))
 			p.logger.Info("job attempt failed, scheduled retry",
 				"job_id", job.ID, "type", job.Type, "attempt", attempt,
@@ -235,11 +235,11 @@ func (p *workerPool) emit(e JobError) {
 	}
 }
 
-// isRetryable returns true when the job should be retried.
-// maxRetries < 0 means Unlimited.
-func isRetryable(attempt, maxRetries int) bool {
-	if maxRetries < 0 {
+// isRetryable returns true when the job has attempts remaining.
+// maxAttempts < 0 means Unlimited.
+func isRetryable(attempt, maxAttempts int) bool {
+	if maxAttempts < 0 {
 		return true
 	}
-	return attempt < maxRetries
+	return attempt < maxAttempts
 }

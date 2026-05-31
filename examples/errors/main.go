@@ -17,7 +17,7 @@ import (
 
 var (
 	// Transient job: unlimited retries until it succeeds.
-	Sync = jobs.Def("sync").WithRetries(jobs.Unlimited)
+	Sync = jobs.Def("sync").WithAttempts(jobs.Unlimited)
 
 	// Always-failing job: 3 retries, then dead-lettered.
 	Flaky = jobs.Def("flaky")

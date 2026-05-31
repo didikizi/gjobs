@@ -107,7 +107,7 @@ func TestRetryOnFailure(t *testing.T) {
 		return errors.New("transient error")
 	})
 
-	if err := q.Enqueue(context.Background(), def, nil, Retries(3)); err != nil {
+	if err := q.Enqueue(context.Background(), def, nil, Attempts(3)); err != nil {
 		t.Fatalf("Enqueue: %v", err)
 	}
 
@@ -166,8 +166,8 @@ func TestDeadLetter(t *testing.T) {
 		return errors.New("always fails")
 	})
 
-	// maxRetries=1 → after first failure it should dead-letter immediately.
-	if err := q.Enqueue(context.Background(), def, nil, Retries(1)); err != nil {
+	// maxAttempts=1 → one attempt, then dead-letter immediately.
+	if err := q.Enqueue(context.Background(), def, nil, Attempts(1)); err != nil {
 		t.Fatalf("Enqueue: %v", err)
 	}
 

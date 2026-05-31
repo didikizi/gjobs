@@ -38,13 +38,13 @@ type ReportParams struct {
 
 var (
 	SendEmail      = jobs.Def("send_email")
-	ChargeCard     = jobs.Def("charge_card").WithRetries(10).WithTimeout(2 * time.Minute)
+	ChargeCard     = jobs.Def("charge_card").WithAttempts(10).WithTimeout(2 * time.Minute)
 	GenerateReport = jobs.Def("generate_report").WithTimeout(15 * time.Minute)
 	Heartbeat      = jobs.Def("heartbeat")
 
 	// Critical emails get more retries and a longer timeout.
 	CriticalEmail = jobs.Def("critical_email").
-			WithRetries(8).
+			WithAttempts(8).
 			WithTimeout(45 * time.Second)
 )
 
@@ -109,7 +109,7 @@ func main() {
 	})
 
 	// Charge with per-call retry override.
-	_ = q.Enqueue(context.Background(), ChargeCard, Payment{UserID: "u-42", AmountUSD: 99.00}, jobs.Retries(15))
+	_ = q.Enqueue(context.Background(), ChargeCard, Payment{UserID: "u-42", AmountUSD: 99.00}, jobs.Attempts(15))
 
 	// Report delayed by 1 second.
 	_ = q.Enqueue(context.Background(), GenerateReport, ReportParams{

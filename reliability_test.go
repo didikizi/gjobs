@@ -119,8 +119,8 @@ func TestPanicRecovery(t *testing.T) {
 		panic("boom")
 	})
 
-	// maxRetries=1 → one attempt, then dead-letter.
-	if err := q.Enqueue(context.Background(), def, nil, Retries(1)); err != nil {
+	// maxAttempts=1 → one attempt, then dead-letter.
+	if err := q.Enqueue(context.Background(), def, nil, Attempts(1)); err != nil {
 		t.Fatalf("Enqueue: %v", err)
 	}
 

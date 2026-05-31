@@ -146,23 +146,23 @@ func WithErrorChannel(ch chan<- JobError) Option {
 
 // pushConfig holds per-job push settings.
 type pushConfig struct {
-	maxRetries int
-	runAt      time.Time
+	maxAttempts int
+	runAt       time.Time
 }
 
 func defaultPushConfig() pushConfig {
-	return pushConfig{maxRetries: 3, runAt: time.Now()}
+	return pushConfig{maxAttempts: 3, runAt: time.Now()}
 }
 
 // PushOption configures an individual job at push time.
 type PushOption func(*pushConfig)
 
-// Retries sets the maximum number of retry attempts (default: 3).
+// Attempts sets the total number of execution attempts for this push (default: 3).
 // Pass jobs.Unlimited (-1) to retry indefinitely.
 //
-//	q.Enqueue(ctx, job, data, jobs.Retries(jobs.Unlimited))
-func Retries(n int) PushOption {
-	return func(c *pushConfig) { c.maxRetries = n }
+//	q.Enqueue(ctx, job, data, jobs.Attempts(jobs.Unlimited))
+func Attempts(n int) PushOption {
+	return func(c *pushConfig) { c.maxAttempts = n }
 }
 
 // After delays job execution by d relative to now.

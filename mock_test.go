@@ -116,7 +116,7 @@ func TestSpy_MarkDone_CalledOnSuccess(t *testing.T) {
 
 // When a handler fails and retries remain, MarkFailed must be called with a
 // non-nil retryAt (reschedule), not dead-lettered.
-func TestSpy_MarkFailed_WithRetry_WhenRetriesRemain(t *testing.T) {
+func TestSpy_MarkFailed_WithRetry_WhenAttemptsRemain(t *testing.T) {
 	spy := newSpy()
 	q := newSpyQueue(t, spy)
 
@@ -124,7 +124,7 @@ func TestSpy_MarkFailed_WithRetry_WhenRetriesRemain(t *testing.T) {
 	q.Register(flaky, func(_ context.Context, _ []byte) error {
 		return errors.New("transient")
 	})
-	q.Enqueue(context.Background(), flaky, nil, Retries(3)) //nolint:errcheck
+	q.Enqueue(context.Background(), flaky, nil, Attempts(3)) //nolint:errcheck
 
 	startAndWait(t, q, func() bool { return spy.failedCount() >= 1 })
 
@@ -140,9 +140,9 @@ func TestSpy_MarkFailed_WithRetry_WhenRetriesRemain(t *testing.T) {
 	}
 }
 
-// When a handler fails and maxRetries is 1 (no retries), MarkFailed must be
+// When a handler fails and maxAttempts is 1 (no retries), MarkFailed must be
 // called with nil retryAt (dead-letter).
-func TestSpy_MarkFailed_DeadLetter_WhenNoRetriesLeft(t *testing.T) {
+func TestSpy_MarkFailed_DeadLetter_WhenNoAttemptsLeft(t *testing.T) {
 	spy := newSpy()
 	q := newSpyQueue(t, spy)
 
@@ -150,7 +150,7 @@ func TestSpy_MarkFailed_DeadLetter_WhenNoRetriesLeft(t *testing.T) {
 	q.Register(broken, func(_ context.Context, _ []byte) error {
 		return errors.New("permanent")
 	})
-	q.Enqueue(context.Background(), broken, nil, Retries(1)) //nolint:errcheck
+	q.Enqueue(context.Background(), broken, nil, Attempts(1)) //nolint:errcheck
 
 	startAndWait(t, q, func() bool { return spy.failedCount() >= 1 })
 
@@ -219,7 +219,7 @@ func TestSpy_ErrorMessagePropagated(t *testing.T) {
 	q.Register(errmsg, func(_ context.Context, _ []byte) error {
 		return errors.New(msg)
 	})
-	q.Enqueue(context.Background(), errmsg, nil, Retries(1)) //nolint:errcheck
+	q.Enqueue(context.Background(), errmsg, nil, Attempts(1)) //nolint:errcheck
 
 	startAndWait(t, q, func() bool { return spy.failedCount() >= 1 })
 

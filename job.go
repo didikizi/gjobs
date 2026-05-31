@@ -8,7 +8,7 @@ import (
 // Unlimited means the job will be retried indefinitely until it succeeds.
 // Backoff grows up to 1 hour and then stays constant.
 //
-//	var Sync = jobs.Def("sync").WithRetries(jobs.Unlimited)
+//	var Sync = jobs.Def("sync").WithAttempts(jobs.Unlimited)
 const Unlimited = -1
 
 // HandlerFunc processes a job. payload is raw JSON.
@@ -26,16 +26,16 @@ const (
 
 // Job is a single unit of work stored in the database.
 type Job struct {
-	ID         string
-	Type       string
-	Payload    []byte
-	Status     Status
-	Attempts   int
-	MaxRetries int
-	RunAt      time.Time
-	CreatedAt  time.Time
-	UpdatedAt  time.Time
-	LastError  string
+	ID          string
+	Type        string
+	Payload     []byte
+	Status      Status
+	Attempts    int
+	MaxAttempts int
+	RunAt       time.Time
+	CreatedAt   time.Time
+	UpdatedAt   time.Time
+	LastError   string
 }
 
 // JobError is sent to the error channel whenever a job execution fails.
@@ -46,7 +46,7 @@ type JobError struct {
 	Type    string // job type name
 	Err     error  // error returned by the handler
 	Attempt int    // which attempt failed (1 = first attempt)
-	Final   bool   // true if the job is now dead-lettered (no more retries)
+	Final   bool   // true if the job is now dead-lettered (no more retries left)
 }
 
 // CronEntry is a recurring schedule stored in the database.
@@ -61,25 +61,26 @@ type CronEntry struct {
 // ── JobDef ────────────────────────────────────────────────────────────────────
 
 // JobDef is a reusable job descriptor that bundles a type name with execution
-// defaults (max retries, per-handler timeout, backoff). Define it once as a
+// defaults (max attempts, per-handler timeout, backoff). Define it once as a
 // package-level variable and use it everywhere — no magic strings, no repeated
 // options.
 //
 //	var SendEmail  = jobs.Def("send_email")
-//	var ChargeCard = jobs.Def("charge_card").WithRetries(10).WithTimeout(2*time.Minute)
+//	var ChargeCard = jobs.Def("charge_card").WithAttempts(10).WithTimeout(2*time.Minute)
 //
 // Then use it everywhere:
 //
 //	q.Register(SendEmail, handler)
-//	q.Enqueue(SendEmail, Email{To: "user@example.com"})
-//	q.CancelAll(SendEmail) // cancel all running send_email jobs
+//	q.Enqueue(ctx, SendEmail, Email{To: "user@example.com"})
+//	q.CancelAll(SendEmail)
 type JobDef struct {
 	// Name is the unique job type identifier stored in the database.
 	Name string
 
-	// MaxRetries is the default maximum number of retry attempts.
-	// Can be overridden per-push with Retries(n).
-	MaxRetries int
+	// MaxAttempts is the total number of execution attempts before a job is
+	// dead-lettered. Can be overridden per-push with Attempts(n).
+	// Default: 3. Use Unlimited (-1) to retry indefinitely.
+	MaxAttempts int
 
 	// Timeout is the per-execution deadline passed to the handler context.
 	// Zero means no timeout.
@@ -92,17 +93,19 @@ type JobDef struct {
 }
 
 // Def creates a JobDef with the given name and default settings
-// (MaxRetries: 3, no timeout). Customise with the With* methods.
+// (MaxAttempts: 3, no timeout). Customise with the With* methods.
 //
 //	var SendEmail  = jobs.Def("send_email")
-//	var ChargeCard = jobs.Def("charge_card").WithRetries(10).WithTimeout(2*time.Minute)
+//	var ChargeCard = jobs.Def("charge_card").WithAttempts(10).WithTimeout(2*time.Minute)
 func Def(name string) JobDef {
-	return JobDef{Name: name, MaxRetries: 3}
+	return JobDef{Name: name, MaxAttempts: 3}
 }
 
-// WithRetries returns a copy with MaxRetries set to n.
-func (d JobDef) WithRetries(n int) JobDef {
-	d.MaxRetries = n
+// WithAttempts returns a copy with MaxAttempts set to n.
+// n is the total number of execution attempts (including the first).
+// Pass Unlimited (-1) to retry indefinitely.
+func (d JobDef) WithAttempts(n int) JobDef {
+	d.MaxAttempts = n
 	return d
 }
 

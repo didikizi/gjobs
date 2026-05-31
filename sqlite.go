@@ -64,7 +64,7 @@ func (s *SQLiteStorage) Enqueue(ctx context.Context, job *Job) error {
 		INSERT INTO jobs (id, type, payload, status, attempts, max_retries, run_at, created_at, updated_at)
 		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
 		job.ID, job.Type, job.Payload, string(job.Status),
-		job.Attempts, job.MaxRetries,
+		job.Attempts, job.MaxAttempts,
 		job.RunAt.UTC(), job.CreatedAt.UTC(), job.UpdatedAt.UTC(),
 	)
 	return err
@@ -257,7 +257,7 @@ func scanJobs(rows *sql.Rows) ([]*Job, error) {
 		var lastError sql.NullString
 		if err := rows.Scan(
 			&j.ID, &j.Type, &j.Payload, &status,
-			&j.Attempts, &j.MaxRetries,
+			&j.Attempts, &j.MaxAttempts,
 			&j.RunAt, &j.CreatedAt, &j.UpdatedAt, &lastError,
 		); err != nil {
 			return nil, err
