@@ -17,24 +17,24 @@ import (
 
 var (
 	// Transient job: unlimited retries until it succeeds.
-	Sync = jobs.Def("sync").WithAttempts(jobs.Unlimited)
+	Sync = gjobs.Def("sync").WithAttempts(gjobs.Unlimited)
 
 	// Always-failing job: 3 retries, then dead-lettered.
-	Flaky = jobs.Def("flaky")
+	Flaky = gjobs.Def("flaky")
 )
 
 func main() {
-	// *slog.Logger satisfies jobs.Logger directly — no adapter needed.
+	// *slog.Logger satisfies gjobs.Logger directly — no adapter needed.
 	logger := slog.New(slog.NewJSONHandler(os.Stdout, nil))
 
 	// Error channel — sized so it won't block workers under normal load.
-	errCh := make(chan jobs.JobError, 64)
+	errCh := make(chan gjobs.JobError, 64)
 
-	q, err := jobs.New(
-		jobs.WithStorage(jobs.NewMemoryStorage()),
-		jobs.WithLogger(logger),
-		jobs.WithErrorChannel(errCh),
-		jobs.WithConcurrency(4),
+	q, err := gjobs.New(
+		gjobs.WithStorage(gjobs.NewMemoryStorage()),
+		gjobs.WithLogger(logger),
+		gjobs.WithErrorChannel(errCh),
+		gjobs.WithConcurrency(4),
 	)
 	if err != nil {
 		panic(err)

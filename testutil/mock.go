@@ -1,4 +1,4 @@
-// Package testutil provides testing helpers for code that depends on jobs.Storage.
+// Package testutil provides testing helpers for code that depends on gjobs.Storage.
 package testutil
 
 import (
@@ -15,26 +15,26 @@ type Call struct {
 	Args   []any
 }
 
-// MockStorage is a configurable implementation of jobs.Storage.
+// MockStorage is a configurable implementation of gjobs.Storage.
 // Set the *Fn fields before use to control return values.
 // Every invocation is appended to Calls for post-hoc assertions.
 //
 // Unset Fn fields fall back to no-op defaults (nil error, empty results).
 //
 //	mock := testutil.NewMockStorage()
-//	mock.ClaimFn = func(ctx context.Context, limit int) ([]*jobs.Job, error) {
-//	    return []*jobs.Job{{ID: "1", Type: "email"}}, nil
+//	mock.ClaimFn = func(ctx context.Context, limit int) ([]*gjobs.Job, error) {
+//	    return []*gjobs.Job{{ID: "1", Type: "email"}}, nil
 //	}
-//	q, _ := jobs.New(jobs.WithStorage(mock))
+//	q, _ := gjobs.New(gjobs.WithStorage(mock))
 type MockStorage struct {
-	EnqueueFn        func(ctx context.Context, job *jobs.Job) error
-	ClaimFn          func(ctx context.Context, limit int) ([]*jobs.Job, error)
+	EnqueueFn        func(ctx context.Context, job *gjobs.Job) error
+	ClaimFn          func(ctx context.Context, limit int) ([]*gjobs.Job, error)
 	MarkDoneFn       func(ctx context.Context, id string) error
 	MarkFailedFn     func(ctx context.Context, id string, errMsg string, retryAt *time.Time) error
 	MarkPendingFn    func(ctx context.Context, id string, runAt time.Time) error
 	RecoverStuckFn   func(ctx context.Context) error
-	UpsertCronFn     func(ctx context.Context, c *jobs.CronEntry) error
-	DueCronsFn       func(ctx context.Context) ([]*jobs.CronEntry, error)
+	UpsertCronFn     func(ctx context.Context, c *gjobs.CronEntry) error
+	DueCronsFn       func(ctx context.Context) ([]*gjobs.CronEntry, error)
 	UpdateCronRunFn  func(ctx context.Context, name string, last, next time.Time) error
 	CloseFn          func() error
 
@@ -66,7 +66,7 @@ func (m *MockStorage) record(method string, args ...any) {
 	m.mu.Unlock()
 }
 
-func (m *MockStorage) Enqueue(ctx context.Context, job *jobs.Job) error {
+func (m *MockStorage) Enqueue(ctx context.Context, job *gjobs.Job) error {
 	m.record("Enqueue", job)
 	if m.EnqueueFn != nil {
 		return m.EnqueueFn(ctx, job)
@@ -74,7 +74,7 @@ func (m *MockStorage) Enqueue(ctx context.Context, job *jobs.Job) error {
 	return nil
 }
 
-func (m *MockStorage) Claim(ctx context.Context, limit int) ([]*jobs.Job, error) {
+func (m *MockStorage) Claim(ctx context.Context, limit int) ([]*gjobs.Job, error) {
 	m.record("Claim", limit)
 	if m.ClaimFn != nil {
 		return m.ClaimFn(ctx, limit)
@@ -114,7 +114,7 @@ func (m *MockStorage) RecoverStuck(ctx context.Context) error {
 	return nil
 }
 
-func (m *MockStorage) UpsertCron(ctx context.Context, c *jobs.CronEntry) error {
+func (m *MockStorage) UpsertCron(ctx context.Context, c *gjobs.CronEntry) error {
 	m.record("UpsertCron", c)
 	if m.UpsertCronFn != nil {
 		return m.UpsertCronFn(ctx, c)
@@ -122,7 +122,7 @@ func (m *MockStorage) UpsertCron(ctx context.Context, c *jobs.CronEntry) error {
 	return nil
 }
 
-func (m *MockStorage) DueCrons(ctx context.Context) ([]*jobs.CronEntry, error) {
+func (m *MockStorage) DueCrons(ctx context.Context) ([]*gjobs.CronEntry, error) {
 	m.record("DueCrons")
 	if m.DueCronsFn != nil {
 		return m.DueCronsFn(ctx)

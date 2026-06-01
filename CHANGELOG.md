@@ -6,6 +6,10 @@ All notable changes to this project will be documented in this file.
 
 ### Breaking Changes
 
+- **Package renamed from `jobs` to `gjobs`.**
+  Update all call sites: `import "github.com/didikizi/gjobs"` already
+  gives you the `gjobs` identifier — no alias needed.
+  Before: `jobs.New(...)` → After: `gjobs.New(...)`.
 - **`Job.MaxRetries` renamed to `Job.MaxAttempts`.**
   `JobDef.MaxRetries` → `JobDef.MaxAttempts`,
   `JobDef.WithRetries(n)` → `JobDef.WithAttempts(n)`,

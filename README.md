@@ -47,18 +47,18 @@ type Email struct {
     Subject string
 }
 
-var SendEmail = jobs.Def("send_email")
+var SendEmail = gjobs.Def("send_email")
 
 func main() {
     ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
     defer stop()
 
-    q, _ := jobs.New(
-        jobs.WithLogger(slog.Default()),
-        jobs.WithShutdownTimeout(30 * time.Second),
+    q, _ := gjobs.New(
+        gjobs.WithLogger(slog.Default()),
+        gjobs.WithShutdownTimeout(30 * time.Second),
     )
 
-    jobs.HandleDef[Email](q, SendEmail, func(ctx context.Context, e Email) error {
+    gjobs.HandleDef[Email](q, SendEmail, func(ctx context.Context, e Email) error {
         fmt.Printf("sending to %s: %s\n", e.To, e.Subject)
         return nil
     })
@@ -112,9 +112,9 @@ Define jobs **once as typed package-level variables** — no magic strings anywh
 
 ```go
 var (
-    SendEmail      = jobs.Def("send_email")
-    ChargeCard     = jobs.Def("charge_card").WithRetries(10).WithTimeout(2*time.Minute)
-    GenerateReport = jobs.Def("generate_report").WithTimeout(15*time.Minute)
+    SendEmail      = gjobs.Def("send_email")
+    ChargeCard     = gjobs.Def("charge_card").WithAttempts(10).WithTimeout(2*time.Minute)
+    GenerateReport = gjobs.Def("generate_report").WithTimeout(15*time.Minute)
 )
 ```
 
@@ -130,7 +130,7 @@ var (
 
 ```go
 // Typed (recommended) — payload is unmarshalled automatically.
-jobs.HandleDef[Email](q, SendEmail, func(ctx context.Context, e Email) error {
+gjobs.HandleDef[Email](q, SendEmail, func(ctx context.Context, e Email) error {
     return smtp.Send(e)
 })
 
@@ -154,13 +154,13 @@ ctx := context.Background()
 q.Enqueue(ctx, SendEmail, Email{To: "alice@example.com"})
 
 // Override attempts for a single push.
-q.Enqueue(ctx, ChargeCard, payment, jobs.Attempts(15))
+q.Enqueue(ctx, ChargeCard, payment, gjobs.Attempts(15))
 
 // Delayed — run after 10 minutes.
-q.Enqueue(ctx, SendEmail, data, jobs.After(10*time.Minute))
+q.Enqueue(ctx, SendEmail, data, gjobs.After(10*time.Minute))
 
 // Scheduled — run at an exact time.
-q.Enqueue(ctx, GenerateReport, data, jobs.At(billingDate))
+q.Enqueue(ctx, GenerateReport, data, gjobs.At(billingDate))
 ```
 
 ---
@@ -182,13 +182,13 @@ After all retries are exhausted the job moves to the **dead-letter queue** (`sta
 
 ```go
 // Queue-level backoff defaults.
-q, _ := jobs.New(
-    jobs.WithBackoffBase(1 * time.Minute),
-    jobs.WithBackoffCap(6 * time.Hour),
+q, _ := gjobs.New(
+    gjobs.WithBackoffBase(1 * time.Minute),
+    gjobs.WithBackoffCap(6 * time.Hour),
 )
 
 // Per-job override via JobDef.
-var HeavySync = jobs.Def("heavy_sync").WithAttempts(5).WithBackoff(2*time.Minute, 12*time.Hour)
+var HeavySync = gjobs.Def("heavy_sync").WithAttempts(5).WithBackoff(2*time.Minute, 12*time.Hour)
 ```
 
 ---
@@ -197,10 +197,10 @@ var HeavySync = jobs.Def("heavy_sync").WithAttempts(5).WithBackoff(2*time.Minute
 
 ```go
 // Run once, 5 minutes from now.
-q.Enqueue(ctx, Reminder, data, jobs.After(5*time.Minute))
+q.Enqueue(ctx, Reminder, data, gjobs.After(5*time.Minute))
 
 // Run at a specific moment.
-q.Enqueue(ctx, Invoice, data, jobs.At(time.Date(2025, 12, 1, 9, 0, 0, 0, time.UTC)))
+q.Enqueue(ctx, Invoice, data, gjobs.At(time.Date(2025, 12, 1, 9, 0, 0, 0, time.UTC)))
 ```
 
 The scheduled time is stored in the database — survives restarts.
@@ -210,7 +210,7 @@ The scheduled time is stored in the database — survives restarts.
 ## 🕐 Recurring jobs
 
 ```go
-var Cleanup = jobs.Def("cleanup")
+var Cleanup = gjobs.Def("cleanup")
 
 q.Schedule(ctx, Cleanup, "1h", func(ctx context.Context) error {
     return db.DeleteExpired()
@@ -230,8 +230,8 @@ Schedules persist in the database. Missed runs fire once on restart.
 ### SQLite (default)
 
 ```go
-q, _ := jobs.New()                             // → jobs.db in cwd
-q, _ := jobs.New(jobs.WithDB("/data/jobs.db")) // custom path
+q, _ := gjobs.New()                             // → jobs.db in cwd
+q, _ := gjobs.New(gjobs.WithDB("/data/jobs.db")) // custom path
 ```
 
 Pure Go, WAL mode enabled. No CGO. Works with [Litestream](https://litestream.io) for streaming replication — just point Litestream at `jobs.db`.
@@ -239,7 +239,7 @@ Pure Go, WAL mode enabled. No CGO. Works with [Litestream](https://litestream.io
 ### Memory — for tests
 
 ```go
-q, _ := jobs.New(jobs.WithStorage(jobs.NewMemoryStorage()))
+q, _ := gjobs.New(gjobs.WithStorage(gjobs.NewMemoryStorage()))
 ```
 
 No disk. Jobs lost on exit. Use in tests and CI.
@@ -251,12 +251,12 @@ No disk. Jobs lost on exit. Use in tests and CI.
 ## ⚙️ Configuration
 
 ```go
-q, _ := jobs.New(
-    jobs.WithDB("myapp.db"),
-    jobs.WithConcurrency(20),
-    jobs.WithPollInterval(200 * time.Millisecond),
-    jobs.WithShutdownTimeout(30 * time.Second),
-    jobs.WithLogger(slog.Default()),
+q, _ := gjobs.New(
+    gjobs.WithDB("myapp.db"),
+    gjobs.WithConcurrency(20),
+    gjobs.WithPollInterval(200 * time.Millisecond),
+    gjobs.WithShutdownTimeout(30 * time.Second),
+    gjobs.WithLogger(slog.Default()),
 )
 ```
 
@@ -269,7 +269,7 @@ q, _ := jobs.New(
 | `WithStorage(s)` | — | Custom storage backend |
 | `WithBackoffBase(d)` | `30s` | Initial retry delay |
 | `WithBackoffCap(d)` | `1h` | Maximum retry delay |
-| `WithLogger(l)` | stdlib log | Any `jobs.Logger` — `*slog.Logger` works directly |
+| `WithLogger(l)` | stdlib log | Any `gjobs.Logger` — `*slog.Logger` works directly |
 | `WithNoLogger()` | — | Disable all log output |
 | `WithErrorChannel(ch)` | — | Receive `JobError` on every failure |
 
@@ -281,7 +281,7 @@ q, _ := jobs.New(
 srv, err := q.Dashboard(":8080")
 
 // With authentication (recommended for production).
-srv, err := q.Dashboard(":8080", jobs.WithDashboardAuth("admin", os.Getenv("DASH_PASSWORD")))
+srv, err := q.Dashboard(":8080", gjobs.WithDashboardAuth("admin", os.Getenv("DASH_PASSWORD")))
 ```
 
 Open `http://localhost:8080` for a live view of pending, running, done, and failed jobs with a retry button.
@@ -298,17 +298,17 @@ The server shuts down automatically when the queue stops.
 
 ## 🔇 Logging & errors
 
-`jobs.Logger` matches `*slog.Logger` exactly — pass it directly:
+`gjobs.Logger` matches `*slog.Logger` exactly — pass it directly:
 
 ```go
-jobs.New(jobs.WithLogger(slog.Default()))
+gjobs.New(gjobs.WithLogger(slog.Default()))
 ```
 
 For programmatic error handling without any log output:
 
 ```go
-errCh := make(chan jobs.JobError, 64)
-q, _ := jobs.New(jobs.WithNoLogger(), jobs.WithErrorChannel(errCh))
+errCh := make(chan gjobs.JobError, 64)
+q, _ := gjobs.New(gjobs.WithNoLogger(), gjobs.WithErrorChannel(errCh))
 
 go func() {
     for e := range errCh {
@@ -337,13 +337,13 @@ gjobs trades horizontal scale for **zero-infrastructure operation**. If your app
 ## 🧪 Testing
 
 ```go
-q, _ := jobs.New(jobs.WithStorage(jobs.NewMemoryStorage()))
+q, _ := gjobs.New(gjobs.WithStorage(gjobs.NewMemoryStorage()))
 
 // Or use the configurable mock for unit tests.
 import "github.com/didikizi/gjobs/testutil"
 
 mock := testutil.NewMockStorage()
-mock.ClaimFn = func(ctx context.Context, n int) ([]*jobs.Job, error) { ... }
+mock.ClaimFn = func(ctx context.Context, n int) ([]*gjobs.Job, error) { ... }
 ```
 
 ---

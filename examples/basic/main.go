@@ -17,18 +17,18 @@ type Email struct {
 	To, Subject string
 }
 
-var SendEmail = jobs.Def("send_email")
+var SendEmail = gjobs.Def("send_email")
 
 func main() {
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
 
-	q, err := jobs.New(jobs.WithDB("example.db"))
+	q, err := gjobs.New(gjobs.WithDB("example.db"))
 	if err != nil {
 		log.Fatal(err)
 	}
 
-	jobs.HandleDef[Email](q, SendEmail, func(_ context.Context, e Email) error {
+	gjobs.HandleDef[Email](q, SendEmail, func(_ context.Context, e Email) error {
 		fmt.Printf("→ %s: %s\n", e.To, e.Subject)
 		return nil
 	})

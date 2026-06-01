@@ -20,10 +20,10 @@ import (
 // ── Job definitions ────────────────────────────────────────────────────────────
 
 var (
-	SendEmail   = jobs.Def("send_email")
-	ChargeCard  = jobs.Def("charge_card").WithAttempts(5).WithTimeout(10 * time.Second)
-	SyncData    = jobs.Def("sync_data").WithAttempts(jobs.Unlimited)
-	FlakyReport = jobs.Def("flaky_report").WithAttempts(2)
+	SendEmail   = gjobs.Def("send_email")
+	ChargeCard  = gjobs.Def("charge_card").WithAttempts(5).WithTimeout(10 * time.Second)
+	SyncData    = gjobs.Def("sync_data").WithAttempts(gjobs.Unlimited)
+	FlakyReport = gjobs.Def("flaky_report").WithAttempts(2)
 )
 
 // ── Payloads ───────────────────────────────────────────────────────────────────
@@ -39,10 +39,10 @@ type ChargePayload struct {
 }
 
 func main() {
-	q, err := jobs.New(
-		jobs.WithStorage(jobs.NewMemoryStorage()),
-		jobs.WithConcurrency(4),
-		jobs.WithPollInterval(200*time.Millisecond),
+	q, err := gjobs.New(
+		gjobs.WithStorage(gjobs.NewMemoryStorage()),
+		gjobs.WithConcurrency(4),
+		gjobs.WithPollInterval(200*time.Millisecond),
 	)
 	if err != nil {
 		log.Fatal(err)
@@ -50,13 +50,13 @@ func main() {
 
 	// ── Register handlers ─────────────────────────────────────────────────────
 
-	jobs.HandleDef[EmailPayload](q, SendEmail, func(_ context.Context, e EmailPayload) error {
+	gjobs.HandleDef[EmailPayload](q, SendEmail, func(_ context.Context, e EmailPayload) error {
 		fmt.Printf("  [email]  → %s: %q\n", e.To, e.Subject)
 		time.Sleep(50 * time.Millisecond)
 		return nil
 	})
 
-	jobs.HandleDef[ChargePayload](q, ChargeCard, func(_ context.Context, p ChargePayload) error {
+	gjobs.HandleDef[ChargePayload](q, ChargeCard, func(_ context.Context, p ChargePayload) error {
 		fmt.Printf("  [charge] → user=%s $%.2f\n", p.UserID, p.Amount)
 		time.Sleep(80 * time.Millisecond)
 		if rand.Intn(3) == 0 {
@@ -101,16 +101,16 @@ func main() {
 	// Delayed jobs — appear as "pending" with a future run_at time.
 	_ = q.Enqueue(context.Background(), SendEmail,
 		EmailPayload{To: "delayed@example.com", Subject: "Delayed message"},
-		jobs.After(30*time.Second),
+		gjobs.After(30*time.Second),
 	)
 	_ = q.Enqueue(context.Background(), ChargeCard,
 		ChargePayload{UserID: "u_vip", Amount: 199.99},
-		jobs.After(1*time.Minute),
+		gjobs.After(1*time.Minute),
 	)
 
 	// ── Cron: generate background noise every 3 seconds ───────────────────────
 
-	if err := q.Schedule(context.Background(), jobs.Def("heartbeat"), "3s", func(_ context.Context) error {
+	if err := q.Schedule(context.Background(), gjobs.Def("heartbeat"), "3s", func(_ context.Context) error {
 		_ = q.Enqueue(context.Background(), SendEmail, EmailPayload{
 			To:      "cron@example.com",
 			Subject: fmt.Sprintf("Heartbeat at %s", time.Now().Format("15:04:05")),

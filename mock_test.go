@@ -1,4 +1,4 @@
-package jobs
+package gjobs
 
 // Behavioural tests: verify that Queue interacts with Storage correctly.
 // Uses a spyStorage that wraps MemoryStorage and records MarkDone/MarkFailed calls.
