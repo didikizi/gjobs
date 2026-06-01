@@ -58,7 +58,7 @@ func (q *Queue) Dashboard(addr string, opts ...DashboardOption) (*http.Server, e
 	}
 	ds, ok := q.storage.(DashboardStorage)
 	if !ok {
-		return nil, fmt.Errorf("jobs: storage does not implement DashboardStorage; use SQLiteStorage or MemoryStorage")
+		return nil, fmt.Errorf("gjobs: storage does not implement DashboardStorage; use SQLiteStorage or MemoryStorage")
 	}
 
 	tmpl, err := template.New("dash").Funcs(template.FuncMap{
@@ -107,7 +107,7 @@ func (q *Queue) Dashboard(addr string, opts ...DashboardOption) (*http.Server, e
 		},
 	}).Parse(dashboardTmpl)
 	if err != nil {
-		return nil, fmt.Errorf("jobs: parse dashboard template: %w", err)
+		return nil, fmt.Errorf("gjobs: parse dashboard template: %w", err)
 	}
 
 	h := &dashHandler{storage: ds, tmpl: tmpl}
@@ -123,7 +123,7 @@ func (q *Queue) Dashboard(addr string, opts ...DashboardOption) (*http.Server, e
 
 	ln, err := net.Listen("tcp", addr)
 	if err != nil {
-		return nil, fmt.Errorf("jobs: dashboard listen %s: %w", addr, err)
+		return nil, fmt.Errorf("gjobs: dashboard listen %s: %w", addr, err)
 	}
 
 	srv := &http.Server{Handler: handler}

@@ -27,16 +27,17 @@ type Call struct {
 //	}
 //	q, _ := gjobs.New(gjobs.WithStorage(mock))
 type MockStorage struct {
-	EnqueueFn        func(ctx context.Context, job *gjobs.Job) error
-	ClaimFn          func(ctx context.Context, limit int) ([]*gjobs.Job, error)
-	MarkDoneFn       func(ctx context.Context, id string) error
-	MarkFailedFn     func(ctx context.Context, id string, errMsg string, retryAt *time.Time) error
-	MarkPendingFn    func(ctx context.Context, id string, runAt time.Time) error
-	RecoverStuckFn   func(ctx context.Context) error
-	UpsertCronFn     func(ctx context.Context, c *gjobs.CronEntry) error
-	DueCronsFn       func(ctx context.Context) ([]*gjobs.CronEntry, error)
-	UpdateCronRunFn  func(ctx context.Context, name string, last, next time.Time) error
-	CloseFn          func() error
+	EnqueueFn       func(ctx context.Context, job *gjobs.Job) error
+	EnqueueDedupFn  func(ctx context.Context, job *gjobs.Job, mode gjobs.DedupMode) (gjobs.EnqueueResult, error)
+	ClaimFn         func(ctx context.Context, limit int) ([]*gjobs.Job, error)
+	MarkDoneFn      func(ctx context.Context, id string) error
+	MarkFailedFn    func(ctx context.Context, id string, errMsg string, retryAt *time.Time) error
+	MarkPendingFn   func(ctx context.Context, id string, runAt time.Time) error
+	RecoverStuckFn  func(ctx context.Context) error
+	UpsertCronFn    func(ctx context.Context, c *gjobs.CronEntry) error
+	DueCronsFn      func(ctx context.Context) ([]*gjobs.CronEntry, error)
+	UpdateCronRunFn func(ctx context.Context, name string, last, next time.Time) error
+	CloseFn         func() error
 
 	mu    sync.Mutex
 	Calls []Call
@@ -72,6 +73,14 @@ func (m *MockStorage) Enqueue(ctx context.Context, job *gjobs.Job) error {
 		return m.EnqueueFn(ctx, job)
 	}
 	return nil
+}
+
+func (m *MockStorage) EnqueueDedup(ctx context.Context, job *gjobs.Job, mode gjobs.DedupMode) (gjobs.EnqueueResult, error) {
+	m.record("EnqueueDedup", job, mode)
+	if m.EnqueueDedupFn != nil {
+		return m.EnqueueDedupFn(ctx, job, mode)
+	}
+	return gjobs.EnqueueResult{Action: gjobs.EnqueueInserted}, nil
 }
 
 func (m *MockStorage) Claim(ctx context.Context, limit int) ([]*gjobs.Job, error) {

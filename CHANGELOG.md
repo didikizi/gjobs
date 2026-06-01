@@ -2,6 +2,38 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.5.0] - 2026-06-01
+
+### Added
+
+- **Deduplication keys.** Attach a string key to a job with `gjobs.DedupKey(k)`
+  and gjobs guarantees only one active (pending/running) job per key. Default
+  mode is *Ignore* — duplicate enqueues silently skip. Pass `gjobs.DedupReplace()`
+  to overwrite pending duplicates with the new payload; running duplicates are
+  left alone (they cover the request via success or retry).
+  `gjobs.DedupTTL(d)` keeps the key locked for `d` after completion. See the
+  [Deduplication keys](README.md#-deduplication-keys) section for snippets and
+  `examples/dedup/main.go` for a runnable end-to-end demo.
+
+### Changed
+
+- **Logger interface gained a `Warn` method** to match `*slog.Logger` exactly.
+  Custom Logger implementations must add `Warn(msg string, args ...any)`;
+  `*slog.Logger` already has it. The built-in `stdLogger` and `noopLogger`
+  are updated.
+- **Schema migration**: `NewSQLiteStorage` now adds three columns
+  (`dedup_key`, `dedup_ttl_seconds`, `dedup_key_expires_at`) idempotently via
+  `PRAGMA table_info` and creates a partial unique index on active dedup keys.
+  No data is rewritten — existing v0.4.x databases upgrade in place on first open.
+- **Storage interface** gained `EnqueueDedup(ctx, *Job, mode) (EnqueueResult, error)`.
+  Existing `Enqueue` signature is unchanged; backends only need the new method
+  if they want to support deduplication.
+- **Error and log prefixes** standardised from `jobs:` / `[jobs]` to
+  `gjobs:` / `[gjobs]` to match the package name. User-visible only in error
+  messages and stdlib logger output.
+
+---
+
 ## [0.4.3] - 2026-06-01
 
 ### Fixed

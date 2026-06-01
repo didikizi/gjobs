@@ -65,7 +65,7 @@ func New(opts ...Option) (*Queue, error) {
 //	q.Register(SendEmail, handler)
 func (q *Queue) Register(def JobDef, handler HandlerFunc) {
 	if q.started.Load() {
-		panic("jobs: Register called after Start — register all handlers before calling Start")
+		panic("gjobs: Register called after Start — register all handlers before calling Start")
 	}
 	h := handler
 	if def.Timeout > 0 {
@@ -91,7 +91,7 @@ func HandleDef[T any](q *Queue, def JobDef, fn func(ctx context.Context, payload
 	q.Register(def, func(ctx context.Context, raw []byte) error {
 		var v T
 		if err := json.Unmarshal(raw, &v); err != nil {
-			return fmt.Errorf("jobs: unmarshal payload for %q: %w", def.Name, err)
+			return fmt.Errorf("gjobs: unmarshal payload for %q: %w", def.Name, err)
 		}
 		return fn(ctx, v)
 	})
@@ -144,19 +144,53 @@ func (q *Queue) CancelAll(def JobDef) int {
 func (q *Queue) enqueueRaw(ctx context.Context, name string, payload any, pcfg pushConfig) error {
 	raw, err := json.Marshal(payload)
 	if err != nil {
-		return fmt.Errorf("jobs: marshal payload: %w", err)
+		return fmt.Errorf("gjobs: marshal payload: %w", err)
 	}
 	now := time.Now()
-	return q.storage.Enqueue(ctx, &Job{
-		ID:         uuid.New().String(),
-		Type:       name,
-		Payload:    raw,
-		Status:     StatusPending,
+	job := &Job{
+		ID:          uuid.New().String(),
+		Type:        name,
+		Payload:     raw,
+		Status:      StatusPending,
 		MaxAttempts: pcfg.maxAttempts,
-		RunAt:      pcfg.runAt,
-		CreatedAt:  now,
-		UpdatedAt:  now,
-	})
+		RunAt:       pcfg.runAt,
+		CreatedAt:   now,
+		UpdatedAt:   now,
+		DedupKey:    pcfg.dedupKey,
+		DedupTTL:    pcfg.dedupTTL,
+	}
+
+	if pcfg.dedupKey == "" {
+		return q.storage.Enqueue(ctx, job)
+	}
+
+	res, err := q.storage.EnqueueDedup(ctx, job, pcfg.dedupMode)
+	if err != nil {
+		return err
+	}
+	switch res.Action {
+	case EnqueueInserted, EnqueueReplaced:
+		if res.Action == EnqueueReplaced {
+			q.cfg.logger.Info("duplicate job replaced",
+				"dedup_key", pcfg.dedupKey, "type", name,
+				"existing_job_id", res.ExistingJobID,
+				"existing_status", string(res.ExistingStatus))
+		}
+		return nil
+	case EnqueueSkippedDuplicate:
+		q.cfg.logger.Warn("duplicate job skipped",
+			"dedup_key", pcfg.dedupKey, "type", name,
+			"existing_job_id", res.ExistingJobID,
+			"existing_status", string(res.ExistingStatus))
+		return nil
+	case EnqueueSkippedRunning:
+		q.cfg.logger.Warn("duplicate job skipped: running job will cover this enqueue",
+			"dedup_key", pcfg.dedupKey, "type", name,
+			"existing_job_id", res.ExistingJobID)
+		return nil
+	default:
+		return fmt.Errorf("gjobs: unexpected EnqueueAction %d", res.Action)
+	}
 }
 
 // registerCron stores a cron entry; buffers it if called before Start.

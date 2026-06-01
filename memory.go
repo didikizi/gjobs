@@ -32,6 +32,81 @@ func (m *MemoryStorage) Enqueue(_ context.Context, job *Job) error {
 	return nil
 }
 
+// EnqueueDedup mirrors SQLiteStorage.EnqueueDedup. See that method for the
+// behavioral contract.
+func (m *MemoryStorage) EnqueueDedup(_ context.Context, job *Job, mode DedupMode) (EnqueueResult, error) {
+	if job.DedupKey == "" {
+		cp := *job
+		m.mu.Lock()
+		m.jobs[job.ID] = &cp
+		m.mu.Unlock()
+		return EnqueueResult{Action: EnqueueInserted}, nil
+	}
+
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	now := time.Now()
+
+	// 1. Drop completed-with-expired-TTL entries for this key.
+	for id, j := range m.jobs {
+		if j.DedupKey != job.DedupKey {
+			continue
+		}
+		if j.Status != StatusDone && j.Status != StatusFailed {
+			continue
+		}
+		if j.DedupKeyExpiresAt == nil || !j.DedupKeyExpiresAt.After(now) {
+			delete(m.jobs, id)
+		}
+	}
+
+	// 2. Find a blocking conflict. Prefer running > pending > completed-with-TTL.
+	var existing *Job
+	rank := func(j *Job) int {
+		switch j.Status {
+		case StatusRunning:
+			return 0
+		case StatusPending:
+			return 1
+		default:
+			return 2
+		}
+	}
+	for _, j := range m.jobs {
+		if j.DedupKey != job.DedupKey {
+			continue
+		}
+		if existing == nil || rank(j) < rank(existing) {
+			existing = j
+		}
+	}
+
+	if existing == nil {
+		cp := *job
+		m.jobs[job.ID] = &cp
+		return EnqueueResult{Action: EnqueueInserted}, nil
+	}
+
+	result := EnqueueResult{ExistingJobID: existing.ID, ExistingStatus: existing.Status}
+
+	switch mode {
+	case DedupModeReplace:
+		if existing.Status == StatusRunning {
+			result.Action = EnqueueSkippedRunning
+			return result, nil
+		}
+		delete(m.jobs, existing.ID)
+		cp := *job
+		m.jobs[job.ID] = &cp
+		result.Action = EnqueueReplaced
+		return result, nil
+	default: // DedupModeIgnore
+		result.Action = EnqueueSkippedDuplicate
+		return result, nil
+	}
+}
+
 // Claim atomically marks up to limit due pending jobs as running.
 func (m *MemoryStorage) Claim(_ context.Context, limit int) ([]*Job, error) {
 	m.mu.Lock()
@@ -66,10 +141,15 @@ func (m *MemoryStorage) MarkDone(_ context.Context, id string) error {
 	defer m.mu.Unlock()
 	j, ok := m.jobs[id]
 	if !ok {
-		return fmt.Errorf("jobs: job %q not found", id)
+		return fmt.Errorf("gjobs: job %q not found", id)
 	}
+	now := time.Now()
 	j.Status = StatusDone
-	j.UpdatedAt = time.Now()
+	j.UpdatedAt = now
+	if j.DedupTTL > 0 {
+		t := now.Add(j.DedupTTL)
+		j.DedupKeyExpiresAt = &t
+	}
 	return nil
 }
 
@@ -78,16 +158,21 @@ func (m *MemoryStorage) MarkFailed(_ context.Context, id string, errMsg string, 
 	defer m.mu.Unlock()
 	j, ok := m.jobs[id]
 	if !ok {
-		return fmt.Errorf("jobs: job %q not found", id)
+		return fmt.Errorf("gjobs: job %q not found", id)
 	}
+	now := time.Now()
 	j.Attempts++
 	j.LastError = errMsg
-	j.UpdatedAt = time.Now()
+	j.UpdatedAt = now
 	if retryAt != nil {
 		j.Status = StatusPending
 		j.RunAt = *retryAt
-	} else {
-		j.Status = StatusFailed
+		return nil
+	}
+	j.Status = StatusFailed
+	if j.DedupTTL > 0 {
+		t := now.Add(j.DedupTTL)
+		j.DedupKeyExpiresAt = &t
 	}
 	return nil
 }
@@ -111,7 +196,7 @@ func (m *MemoryStorage) MarkPending(_ context.Context, id string, runAt time.Tim
 	defer m.mu.Unlock()
 	j, ok := m.jobs[id]
 	if !ok {
-		return fmt.Errorf("jobs: job %q not found", id)
+		return fmt.Errorf("gjobs: job %q not found", id)
 	}
 	j.Status = StatusPending
 	j.RunAt = runAt
@@ -146,7 +231,7 @@ func (m *MemoryStorage) UpdateCronRun(_ context.Context, name string, last, next
 	defer m.mu.Unlock()
 	c, ok := m.crons[name]
 	if !ok {
-		return fmt.Errorf("jobs: cron %q not found", name)
+		return fmt.Errorf("gjobs: cron %q not found", name)
 	}
 	c.LastRun = &last
 	c.NextRun = next
@@ -206,10 +291,10 @@ func (m *MemoryStorage) RetryJob(_ context.Context, id string) error {
 	defer m.mu.Unlock()
 	j, ok := m.jobs[id]
 	if !ok {
-		return fmt.Errorf("jobs: job %q not found", id)
+		return fmt.Errorf("gjobs: job %q not found", id)
 	}
 	if j.Status != StatusFailed {
-		return fmt.Errorf("jobs: job %q is not failed (status=%s)", id, j.Status)
+		return fmt.Errorf("gjobs: job %q is not failed (status=%s)", id, j.Status)
 	}
 	now := time.Now()
 	j.Status = StatusPending

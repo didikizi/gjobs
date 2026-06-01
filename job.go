@@ -36,6 +36,20 @@ type Job struct {
 	CreatedAt   time.Time
 	UpdatedAt   time.Time
 	LastError   string
+
+	// DedupKey, when non-empty, makes the job participate in deduplication.
+	// At most one active (pending/running) job per key exists; completed jobs
+	// can extend the lock via DedupTTL.
+	DedupKey string
+
+	// DedupTTL keeps DedupKey reserved for this duration after the job
+	// completes (success or final failure). Zero means the key is released
+	// immediately on completion.
+	DedupTTL time.Duration
+
+	// DedupKeyExpiresAt is set by the storage when the job completes if
+	// DedupTTL > 0. Nil otherwise. Treated as already-expired when nil.
+	DedupKeyExpiresAt *time.Time
 }
 
 // JobError is sent to the error channel whenever a job execution fails.

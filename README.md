@@ -193,6 +193,36 @@ var HeavySync = gjobs.Def("heavy_sync").WithAttempts(5).WithBackoff(2*time.Minut
 
 ---
 
+## 🔑 Deduplication keys
+
+Attach a string key to a job and gjobs guarantees only one job per key is active at a time. Useful for "don't send the welcome email twice", debounced refresh jobs, or per-user one-at-a-time queues.
+
+```go
+// Default mode (Ignore) — second enqueue is silently skipped, returns nil.
+q.Enqueue(ctx, SendWelcome, payload, gjobs.DedupKey("welcome:user-42"))
+q.Enqueue(ctx, SendWelcome, payload, gjobs.DedupKey("welcome:user-42")) // no-op
+```
+
+**Replace mode** swaps the pending duplicate for the new payload. A *running* duplicate is left alone — it will either succeed or fail and retry, which covers the new enqueue automatically.
+
+```go
+q.Enqueue(ctx, RefreshCache, fresh, gjobs.DedupKey("cache:home"), gjobs.DedupReplace())
+```
+
+**TTL** extends the lock past completion. Within the window, new enqueues with the same key are still treated as duplicates. Time is measured from the moment of completion; storage granularity is one second.
+
+```go
+// One report per day, even if the trigger fires multiple times.
+q.Enqueue(ctx, GenerateReport, args,
+    gjobs.DedupKey("report:daily:2026-06-01"),
+    gjobs.DedupTTL(24*time.Hour),
+)
+```
+
+`DedupReplace` and `DedupTTL` without `DedupKey` are no-ops — `DedupKey` is the trigger.
+
+---
+
 ## ⏱️ Delayed & scheduled jobs
 
 ```go

@@ -243,7 +243,10 @@ func TestMockStorage_ImplementsStorage(t *testing.T) {
 // recreate a minimal equivalent inline to confirm the interface is satisfied.
 type minimalMock struct{}
 
-func (minimalMock) Enqueue(_ context.Context, _ *Job) error                              { return nil }
+func (minimalMock) Enqueue(_ context.Context, _ *Job) error { return nil }
+func (minimalMock) EnqueueDedup(_ context.Context, _ *Job, _ DedupMode) (EnqueueResult, error) {
+	return EnqueueResult{Action: EnqueueInserted}, nil
+}
 func (minimalMock) Claim(_ context.Context, _ int) ([]*Job, error)                       { return nil, nil }
 func (minimalMock) MarkDone(_ context.Context, _ string) error                           { return nil }
 func (minimalMock) MarkFailed(_ context.Context, _ string, _ string, _ *time.Time) error { return nil }
@@ -252,6 +255,6 @@ func (minimalMock) RecoverStuck(_ context.Context) error                        
 func (minimalMock) UpsertCron(_ context.Context, _ *CronEntry) error                     { return nil }
 func (minimalMock) DueCrons(_ context.Context) ([]*CronEntry, error)                     { return nil, nil }
 func (minimalMock) UpdateCronRun(_ context.Context, _ string, _, _ time.Time) error      { return nil }
-func (minimalMock) Close() error                                                          { return nil }
+func (minimalMock) Close() error                                                         { return nil }
 
 func newMockAdapter() Storage { return minimalMock{} }

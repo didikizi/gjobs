@@ -35,7 +35,7 @@ func newCronScheduler(s Storage, enqueue func(name string) error, logger Logger,
 func (cs *cronScheduler) register(ctx context.Context, name, schedule string) error {
 	d, err := time.ParseDuration(schedule)
 	if err != nil {
-		return fmt.Errorf("jobs: invalid cron schedule %q: %w", schedule, err)
+		return fmt.Errorf("gjobs: invalid cron schedule %q: %w", schedule, err)
 	}
 
 	cs.mu.Lock()
