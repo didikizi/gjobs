@@ -2,7 +2,22 @@
 
 All notable changes to this project will be documented in this file.
 
-## [0.4.1] - 2026-05-30
+## [0.4.3] - 2026-06-01
+
+### Fixed
+
+- **Cron jobs were never retried.** The cron fire path enqueued jobs with
+  `MaxAttempts: 0`, which made every failing cron handler dead-letter
+  immediately. Cron jobs now inherit the `MaxAttempts` value from the
+  registered `JobDef` (default: 3).
+
+### Changed
+
+- **Go source comments** updated from `jobs.` to `gjobs.` package prefix.
+
+---
+
+## [0.4.2] - 2026-06-01
 
 ### Breaking Changes
 

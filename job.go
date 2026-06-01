@@ -8,7 +8,7 @@ import (
 // Unlimited means the job will be retried indefinitely until it succeeds.
 // Backoff grows up to 1 hour and then stays constant.
 //
-//	var Sync = jobs.Def("sync").WithAttempts(jobs.Unlimited)
+//	var Sync = gjobs.Def("sync").WithAttempts(gjobs.Unlimited)
 const Unlimited = -1
 
 // HandlerFunc processes a job. payload is raw JSON.
@@ -65,8 +65,8 @@ type CronEntry struct {
 // package-level variable and use it everywhere — no magic strings, no repeated
 // options.
 //
-//	var SendEmail  = jobs.Def("send_email")
-//	var ChargeCard = jobs.Def("charge_card").WithAttempts(10).WithTimeout(2*time.Minute)
+//	var SendEmail  = gjobs.Def("send_email")
+//	var ChargeCard = gjobs.Def("charge_card").WithAttempts(10).WithTimeout(2*time.Minute)
 //
 // Then use it everywhere:
 //
@@ -95,8 +95,8 @@ type JobDef struct {
 // Def creates a JobDef with the given name and default settings
 // (MaxAttempts: 3, no timeout). Customise with the With* methods.
 //
-//	var SendEmail  = jobs.Def("send_email")
-//	var ChargeCard = jobs.Def("charge_card").WithAttempts(10).WithTimeout(2*time.Minute)
+//	var SendEmail  = gjobs.Def("send_email")
+//	var ChargeCard = gjobs.Def("charge_card").WithAttempts(10).WithTimeout(2*time.Minute)
 func Def(name string) JobDef {
 	return JobDef{Name: name, MaxAttempts: 3}
 }
@@ -118,7 +118,7 @@ func (d JobDef) WithTimeout(t time.Duration) JobDef {
 // WithBackoff returns a copy with per-job backoff overrides.
 // base is the initial delay (default: 30s), max is the maximum delay (default: 1h).
 //
-//	var HeavyJob = jobs.Def("heavy_job").WithBackoff(1*time.Minute, 6*time.Hour)
+//	var HeavyJob = gjobs.Def("heavy_job").WithBackoff(1*time.Minute, 6*time.Hour)
 func (d JobDef) WithBackoff(base, max time.Duration) JobDef {
 	d.BackoffBase = base
 	d.BackoffCap = max

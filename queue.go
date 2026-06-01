@@ -61,7 +61,7 @@ func New(opts ...Option) (*Queue, error) {
 // If JobDef.Timeout > 0 the handler context is cancelled after that duration.
 // Panics if called after Start — all handlers must be registered before starting.
 //
-//	var SendEmail = jobs.Def("send_email")
+//	var SendEmail = gjobs.Def("send_email")
 //	q.Register(SendEmail, handler)
 func (q *Queue) Register(def JobDef, handler HandlerFunc) {
 	if q.started.Load() {
@@ -83,8 +83,8 @@ func (q *Queue) Register(def JobDef, handler HandlerFunc) {
 
 // HandleDef registers a typed handler that automatically unmarshals the JSON payload.
 //
-//	var SendEmail = jobs.Def("send_email")
-//	jobs.HandleDef[Email](q, SendEmail, func(ctx context.Context, e Email) error {
+//	var SendEmail = gjobs.Def("send_email")
+//	gjobs.HandleDef[Email](q, SendEmail, func(ctx context.Context, e Email) error {
 //	    return sendEmail(e)
 //	})
 func HandleDef[T any](q *Queue, def JobDef, fn func(ctx context.Context, payload T) error) {
@@ -101,8 +101,8 @@ func HandleDef[T any](q *Queue, def JobDef, fn func(ctx context.Context, payload
 // caller options override it.
 //
 //	q.Enqueue(ctx, SendEmail, Email{To: "user@example.com"})
-//	q.Enqueue(ctx, SendEmail, data, jobs.Attempts(10))       // override attempts
-//	q.Enqueue(ctx, SendEmail, data, jobs.After(time.Minute)) // delayed
+//	q.Enqueue(ctx, SendEmail, data, gjobs.Attempts(10))       // override attempts
+//	q.Enqueue(ctx, SendEmail, data, gjobs.After(time.Minute)) // delayed
 func (q *Queue) Enqueue(ctx context.Context, def JobDef, payload any, opts ...PushOption) error {
 	merged := make([]PushOption, 0, 1+len(opts))
 	merged = append(merged, Attempts(def.MaxAttempts))
@@ -118,7 +118,7 @@ func (q *Queue) Enqueue(ctx context.Context, def JobDef, payload any, opts ...Pu
 // Schedule registers a recurring job that fires every interval.
 // interval is any Go duration string: "5s", "30m", "2h".
 //
-//	var Heartbeat = jobs.Def("heartbeat")
+//	var Heartbeat = gjobs.Def("heartbeat")
 //	q.Schedule(ctx, Heartbeat, "1m", func(ctx context.Context) error { ... })
 func (q *Queue) Schedule(ctx context.Context, def JobDef, interval string, fn func(ctx context.Context) error) error {
 	q.Register(def, func(ctx context.Context, _ []byte) error { return fn(ctx) })
@@ -195,7 +195,14 @@ func (q *Queue) Start(ctx context.Context) error {
 		q.cfg.backoffBase, q.cfg.backoffCap, q.cfg.logger, q.cfg.errCh)
 
 	q.scheduler = newCronScheduler(q.storage, func(name string) error {
-		return q.enqueueRaw(context.Background(), name, nil, pushConfig{maxAttempts: 0, runAt: time.Now()})
+		q.mu.RLock()
+		def := q.defs[name]
+		q.mu.RUnlock()
+		maxAttempts := def.MaxAttempts
+		if maxAttempts == 0 {
+			maxAttempts = 3
+		}
+		return q.enqueueRaw(context.Background(), name, nil, pushConfig{maxAttempts: maxAttempts, runAt: time.Now()})
 	}, q.cfg.logger, q.cfg.pollInterval)
 	for _, cr := range pending {
 		if err := q.scheduler.register(context.Background(), cr.name, cr.schedule); err != nil {

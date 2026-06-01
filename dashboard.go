@@ -23,7 +23,7 @@ type dashConfig struct {
 // WithDashboardAuth enables HTTP Basic Auth on the dashboard.
 // Set DASH_PASSWORD via an environment variable; never hard-code credentials.
 //
-//	q.Dashboard(":8080", jobs.WithDashboardAuth("admin", os.Getenv("DASH_PASSWORD")))
+//	q.Dashboard(":8080", gjobs.WithDashboardAuth("admin", os.Getenv("DASH_PASSWORD")))
 func WithDashboardAuth(username, password string) DashboardOption {
 	return func(c *dashConfig) {
 		c.username = username
@@ -50,7 +50,7 @@ func basicAuth(username, password string, next http.Handler) http.Handler {
 // storage backend does not implement DashboardStorage.
 //
 //	srv, err := q.Dashboard(":8080")
-//	srv, err := q.Dashboard(":8080", jobs.WithDashboardAuth("admin", os.Getenv("DASH_PASSWORD")))
+//	srv, err := q.Dashboard(":8080", gjobs.WithDashboardAuth("admin", os.Getenv("DASH_PASSWORD")))
 func (q *Queue) Dashboard(addr string, opts ...DashboardOption) (*http.Server, error) {
 	cfg := &dashConfig{}
 	for _, o := range opts {

@@ -10,8 +10,8 @@ import (
 // Logger is the interface for queue-level logging. The signature matches
 // *slog.Logger exactly — pass slog.Default() directly without any adapter.
 //
-//	jobs.New(jobs.WithLogger(slog.Default()))
-//	jobs.New(jobs.WithNoLogger(), jobs.WithErrorChannel(ch))
+//	gjobs.New(gjobs.WithLogger(slog.Default()))
+//	gjobs.New(gjobs.WithNoLogger(), gjobs.WithErrorChannel(ch))
 type Logger interface {
 	Info(msg string, args ...any)
 	Error(msg string, args ...any)
@@ -99,7 +99,7 @@ func WithBackoffCap(d time.Duration) Option {
 // is cancelled. Workers that exceed this deadline are abandoned (jobs stay pending
 // and recover on next restart via RecoverStuck). Default: wait indefinitely.
 //
-//	q, _ := jobs.New(jobs.WithShutdownTimeout(30 * time.Second))
+//	q, _ := gjobs.New(gjobs.WithShutdownTimeout(30 * time.Second))
 func WithShutdownTimeout(d time.Duration) Option {
 	return func(c *config) { c.shutdownTimeout = d }
 }
@@ -113,7 +113,7 @@ func WithStorage(s Storage) Option {
 // WithLogger sets a custom logger. The Logger interface matches *slog.Logger exactly,
 // so slog.Default() can be passed directly.
 //
-//	jobs.New(jobs.WithLogger(slog.Default()))
+//	gjobs.New(gjobs.WithLogger(slog.Default()))
 func WithLogger(l Logger) Option {
 	return func(c *config) { c.logger = l }
 }
@@ -121,8 +121,8 @@ func WithLogger(l Logger) Option {
 // WithNoLogger disables all log output. Combine with WithErrorChannel to
 // handle errors programmatically without any console output.
 //
-//	errCh := make(chan jobs.JobError, 64)
-//	jobs.New(jobs.WithNoLogger(), jobs.WithErrorChannel(errCh))
+//	errCh := make(chan gjobs.JobError, 64)
+//	gjobs.New(gjobs.WithNoLogger(), gjobs.WithErrorChannel(errCh))
 func WithNoLogger() Option {
 	return func(c *config) { c.logger = noopLogger{} }
 }
@@ -131,8 +131,8 @@ func WithNoLogger() Option {
 // fails. The send is non-blocking — if the channel is full the error is
 // logged and dropped, so size the channel appropriately.
 //
-//	errCh := make(chan jobs.JobError, 64)
-//	q, _ := jobs.New(jobs.WithErrorChannel(errCh))
+//	errCh := make(chan gjobs.JobError, 64)
+//	q, _ := gjobs.New(gjobs.WithErrorChannel(errCh))
 //	go func() {
 //	    for e := range errCh {
 //	        if e.Final { alerting.DeadLetter(e) }
@@ -158,9 +158,9 @@ func defaultPushConfig() pushConfig {
 type PushOption func(*pushConfig)
 
 // Attempts sets the total number of execution attempts for this push (default: 3).
-// Pass jobs.Unlimited (-1) to retry indefinitely.
+// Pass gjobs.Unlimited (-1) to retry indefinitely.
 //
-//	q.Enqueue(ctx, job, data, jobs.Attempts(jobs.Unlimited))
+//	q.Enqueue(ctx, job, data, gjobs.Attempts(gjobs.Unlimited))
 func Attempts(n int) PushOption {
 	return func(c *pushConfig) { c.maxAttempts = n }
 }
