@@ -5,7 +5,13 @@
 *.so
 *.dylib
 *.claude
-dashboard
+
+# Stray binaries from `go build ./examples/<name>` in repo root
+/basic
+/dashboard
+/dedup
+/errors
+/jobdef
 
 # Test binary
 *.test

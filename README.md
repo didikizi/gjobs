@@ -353,14 +353,15 @@ go func() {
 
 ## 🆚 Comparison
 
-|  | Infrastructure | Multi-machine | Persistent |
-|--|:-:|:-:|:-:|
-| **gjobs** | none — just a file | ❌ | ✅ |
-| [River](https://riverqueue.com) | Postgres server | ✅ | ✅ |
-| [asynq](https://github.com/hibiken/asynq) | Redis server | ✅ | ✅ |
-| [machinery](https://github.com/RichardKnop/machinery) | Redis / AMQP | ✅ | ✅ |
+|  | Infra | Multi-machine | Pure Go | Typed handlers | Cron | Dashboard | Dedup keys |
+|--|:-:|:-:|:-:|:-:|:-:|:-:|:-:|
+| **gjobs** | file | ❌ | ✅ | ✅ | ✅ | ✅ | ✅ |
+| [liteq](https://github.com/khepin/liteq) | file | ❌ | ❌ (CGO) | ❌ | ❌ | ❌ | ✅ |
+| [River](https://riverqueue.com) | Postgres | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
+| [asynq](https://github.com/hibiken/asynq) | Redis | ✅ | ✅ | ✅ | ✅ | ✅ | ❌ |
+| [machinery](https://github.com/RichardKnop/machinery) | Redis / AMQP | ✅ | ✅ | ❌ | ✅ | ❌ | ❌ |
 
-gjobs trades horizontal scale for **zero-infrastructure operation**. If your app fits on one machine, you get reliable background jobs without adding a single dependency to your deployment.
+gjobs sits between liteq and River/asynq: same zero-infrastructure footprint as liteq, with batteries-included ergonomics (typed handlers, cron, dashboard) that liteq doesn't include — trading the horizontal scalability of River/asynq.
 
 ---
 
